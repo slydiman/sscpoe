@@ -1,0 +1,33 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "SSCPOE account is already configured",
+            "reauth_successful": "Reauthentication was successful"
+        },
+        "error": {
+            "invalid_email": "Invalid e-mail",
+            "invalid_password": "Password must be 6..12 chars",
+            "wrong_email": "E-mail not registered",
+            "wrong_password": "Incorrect password",
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "unknown"
+        },
+        "step": {
+            "user": {
+                "title": "Fill in your SSCPOE credentials",
+                "data": {
+                    "email": "E-mail",
+                    "password": "Password"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Reauthenticate with your SSCPOE credentials",
+                "data": {
+                    "email": "E-mail",
+                    "password": "Password"
+                }
+            }
+        }
+    }
+}
