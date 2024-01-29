@@ -332,6 +332,8 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
     global SSCPOE_session
     try:
         if SSCPOE_session is None or act == "eml":
+            if SSCPOE_session:
+                SSCPOE_session.close()
             SSCPOE_session = requests.Session()
         response = SSCPOE_session.get(url, headers=headers)
     except Exception as e:
