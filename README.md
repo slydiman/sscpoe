@@ -9,9 +9,7 @@
 
 <img align="right" src="https://github.com/slydiman/sscpoe/blob/main/logo.png?raw=true" alt="Logo"/>
 
-Unofficial SSCPOE/STEAMEMO Cloud integration for Home Assistant to control Cloud-managed POE Switch 4/8/16.
-
-[SSCPOE in Google Play](https://play.google.com/store/apps/details?id=com.sscee.app.sscpoe)
+Unofficial SSCPOE/STEAMEMO integration for Home Assistant to control cloud-managed POE switches 4/8/16.
 
 [Amazon](https://www.amazon.com/stores/STEAMEMO/page/77A8B3BC-CC6D-49F8-B191-49E312082D49)
 
@@ -47,7 +45,7 @@ Tested with SSC-PS308G.
 
 # Configuration
 
-This integration requires using your SSCPOE account `email` and `password`.
+This integration requires using your SSCPOE account `email` and `password`. Use official SSCPOE from [Google Play](https://play.google.com/store/apps/details?id=com.sscee.app.sscpoe) or [App Store](https://apps.apple.com/us/app/sscpoe/id1555401398) to register account and devices.
 
 [![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=sscpoe)
 
