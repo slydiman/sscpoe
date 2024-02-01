@@ -369,4 +369,9 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
     return j
 
 
-SSCPOE_errcode = {0: "OK", 20004: "Invalid email", 20004: "Invalid password"}
+SSCPOE_errcode = {
+    0: "OK",
+    10002: "Multiple login",
+    20004: "Invalid email",
+    20004: "Invalid password",
+}

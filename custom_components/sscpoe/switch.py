@@ -6,7 +6,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, LOGGER
-from . import SSCPOE_Coordinator
+from .coordinator import SSCPOE_Coordinator
 
 
 async def async_setup_entry(
@@ -44,9 +44,9 @@ class POEPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
     @property
     def icon(self):
         if self.is_on:
-            return "mdi:toggle-switch-variant"  # "mdi:ethernet"
+            return "mdi:ethernet"
         else:
-            return "mdi:toggle-switch-variant-off"  # "mdi:ethernet-off"
+            return "mdi:ethernet-off"
 
     #    @property
     #    def is_on(self) -> bool:

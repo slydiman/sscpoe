@@ -1,5 +1,8 @@
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import POWER_WATT, ELECTRIC_POTENTIAL_VOLT
+from homeassistant.const import (
+    UnitOfElectricPotential,
+    UnitOfPower,
+)
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -10,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, LOGGER
-from . import SSCPOE_Coordinator
+from .coordinator import SSCPOE_Coordinator
 
 
 async def async_setup_entry(
@@ -36,10 +39,10 @@ async def async_setup_entry(
 
 
 class PortPowerSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
-    _attr_native_unit_of_measurement = POWER_WATT
-    _attr_unit_of_measurement = POWER_WATT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:flash"
 
     def __init__(self, coordinator: SSCPOE_Coordinator, sn: str, port: int):
         self._sn = sn
@@ -59,10 +62,6 @@ class PortPowerSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
             self.entity_id = f"{DOMAIN}.{sn}_{port+1}_power".lower()
         self._attr_device_info = device["device_info"]
 
-    @property
-    def icon(self):
-        return "mdi:flash"
-
     @callback
     def _handle_coordinator_update(self) -> None:
         if self._port == -1:
@@ -81,10 +80,10 @@ class PortPowerSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
 
 
 class VoltageSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
-    _attr_native_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
-    _attr_unit_of_measurement = ELECTRIC_POTENTIAL_VOLT
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
     _attr_device_class = SensorDeviceClass.VOLTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:sine-wave"
 
     def __init__(self, coordinator: SSCPOE_Coordinator, sn: str):
         self._sn = sn
@@ -97,10 +96,6 @@ class VoltageSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
         self._attr_unique_id = f"{sn}_voltage".lower()
         self.entity_id = f"{DOMAIN}.{sn}_voltage".lower()
         self._attr_device_info = device["device_info"]
-
-    @property
-    def icon(self):
-        return "mdi:sine-wave"
 
     @callback
     def _handle_coordinator_update(self) -> None:
