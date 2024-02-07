@@ -53,4 +53,4 @@ This integration requires using your SSCPOE account `email` and `password`. Use 
 
 This integration exposes power sensors and POE control switches. 
 
-Note: The cloud server does not support multiple connections to the same account from Home Assistant and the mobile app. The device in Home Assistant will disappear after connecting from the official SSCPOE mobile app and will be reconnected within 30 seconds automatically.
+Note: The cloud server does not support multiple connections to the same account from Home Assistant and the mobile app. The device in Home Assistant will disappear after connecting from the official SSCPOE mobile app and will be reconnected within 30 seconds automatically. You can share the project in the official SSCPOE mobile app to other account and use it for this integration.
