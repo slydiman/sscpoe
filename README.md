@@ -8,7 +8,7 @@
 
 <img align="right" src="https://github.com/slydiman/sscpoe/blob/main/logo.png?raw=true" alt="Logo"/>
 
-Unofficial SSCPOE/STEAMEMO/Amitres IOT integration for Home Assistant to control cloud-managed POE switches 4/8/16.
+Unofficial SSCPOE/STEAMEMO/Amitres IOT integration for Home Assistant to control managed POE switches 4/8/16.
 
 [Amazon](https://www.amazon.com/stores/STEAMEMO/page/77A8B3BC-CC6D-49F8-B191-49E312082D49)
 
@@ -44,7 +44,9 @@ Tested with PS308G and GPS204.
 
 # Configuration
 
-This integration requires using your SSCPOE account `email` and `password`. Use official SSCPOE from [Google Play](https://play.google.com/store/apps/details?id=com.sscee.app.sscpoe) or [App Store](https://apps.apple.com/us/app/sscpoe/id1555401398) to register account and devices.
+This integration supports the cloud and local management.
+For the cloud management you need the SSCPOE account `email` and `password`. Use official SSCPOE from [Google Play](https://play.google.com/store/apps/details?id=com.sscee.app.sscpoe), [App Store](https://apps.apple.com/us/app/sscpoe/id1555401398) or [Windows desktop config app](http://www.sscee.com/en/en/col.jsp?id=105) to register account and devices.
+For the local management you need the activation code (default `123456`). This integration will scan the local network for available devices automatically. The activation code may be changed in the official SSCPOE app.
 
 [![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=sscpoe)
 
@@ -52,4 +54,4 @@ This integration requires using your SSCPOE account `email` and `password`. Use 
 
 This integration exposes power sensors and POE control switches. 
 
-Note: The cloud server does not support multiple connections to the same account from Home Assistant and the mobile app. The device in Home Assistant will disappear after connecting from the official SSCPOE mobile app and will be reconnected within 30 seconds automatically. You can share the project in the official SSCPOE mobile app to other account and use the main account for this integration and the second account for the mobile app.
+Note: The cloud server does not support multiple connections to the same account from Home Assistant and the SSCPOE app. If you are using the cloud management, the device in Home Assistant will disappear after connecting from the official SSCPOE app and will be reconnected within 30 seconds automatically. You can share the project in the official SSCPOE app to other account and use this account for this integration. The device settings in the SSCPOE app are available only for the admin account.

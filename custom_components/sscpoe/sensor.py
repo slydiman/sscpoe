@@ -50,16 +50,21 @@ class PortPowerSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
         device = coordinator.devices[sn]
         pid = device["pid"]
         detail = device["detail"]
-        prj_name = coordinator.prj[pid]["name"]
+        prj_name = (
+            coordinator.prj[pid]["name"] + "/"
+            if pid != SSCPOE_Coordinator.local_pid
+            else ""
+        )
+        local = "local_" if pid == SSCPOE_Coordinator.local_pid else ""
         super().__init__(coordinator, context=(pid, sn))
         if port == -1:
-            self._attr_name = f"{prj_name}/{detail['name']} total Power"
-            self._attr_unique_id = f"{sn}_total_power".lower()
-            self.entity_id = f"{DOMAIN}.{sn}_total_power".lower()
+            self._attr_name = f"{prj_name}{detail['name']} Total Power"
+            self._attr_unique_id = f"{local}{sn}_total_power".lower()
+            self.entity_id = f"{DOMAIN}.{local}{sn}_total_power".lower()
         else:
-            self._attr_name = f"{prj_name}/{detail['name']}/port {port+1} Power"
-            self._attr_unique_id = f"{sn}_{port+1}_power".lower()
-            self.entity_id = f"{DOMAIN}.{sn}_{port+1}_power".lower()
+            self._attr_name = f"{prj_name}{detail['name']} Port {port+1} Power"
+            self._attr_unique_id = f"{local}{sn}_{port+1}_power".lower()
+            self.entity_id = f"{DOMAIN}.{local}{sn}_{port+1}_power".lower()
         self._attr_device_info = device["device_info"]
 
     @callback
@@ -90,11 +95,16 @@ class VoltageSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
         device = coordinator.devices[sn]
         pid = device["pid"]
         detail = device["detail"]
-        prj_name = coordinator.prj[pid]["name"]
+        prj_name = (
+            coordinator.prj[pid]["name"] + "/"
+            if pid != SSCPOE_Coordinator.local_pid
+            else ""
+        )
+        local = "local_" if pid == SSCPOE_Coordinator.local_pid else ""
         super().__init__(coordinator, context=(pid, sn))
-        self._attr_name = f"{prj_name}/{detail['name']} Voltage"
-        self._attr_unique_id = f"{sn}_voltage".lower()
-        self.entity_id = f"{DOMAIN}.{sn}_voltage".lower()
+        self._attr_name = f"{prj_name}{detail['name']} Voltage"
+        self._attr_unique_id = f"{local}{sn}_voltage".lower()
+        self.entity_id = f"{DOMAIN}.{local}{sn}_voltage".lower()
         self._attr_device_info = device["device_info"]
 
     @callback

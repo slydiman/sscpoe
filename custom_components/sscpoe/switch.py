@@ -34,11 +34,16 @@ class POEPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         device = coordinator.devices[sn]
         self._pid = device["pid"]
         detail = device["detail"]
-        prj_name = coordinator.prj[self._pid]["name"]
+        prj_name = (
+            coordinator.prj[self._pid]["name"] + "/"
+            if self._pid != SSCPOE_Coordinator.local_pid
+            else ""
+        )
+        local = "local_" if self._pid == SSCPOE_Coordinator.local_pid else ""
         super().__init__(coordinator, context=(self._pid, sn))
-        self._attr_name = f"{prj_name}/{detail['name']}/port {port+1} POE"
-        self._attr_unique_id = f"{sn}_{port+1}_switch".lower()
-        self.entity_id = f"{DOMAIN}.{sn}_{port+1}_switch".lower()
+        self._attr_name = f"{prj_name}{detail['name']} Port {port+1} POE"
+        self._attr_unique_id = f"{local}{sn}_{port+1}_switch".lower()
+        self.entity_id = f"{DOMAIN}.{local}{sn}_{port+1}_switch".lower()
         self._attr_device_info = device["device_info"]
 
     @property

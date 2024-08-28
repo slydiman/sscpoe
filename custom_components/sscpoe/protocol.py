@@ -1,8 +1,13 @@
+import platform
 import base64
 import struct
 import json
+import socket
 import requests
+import time
+import hashlib
 from urllib.parse import quote
+from random import randrange
 from .const import LOGGER
 
 TIMES = 32  # The number of iterations is recommended to be an integer multiple of 8.
@@ -183,12 +188,14 @@ _SSCPOE_CLOUD_API_URL = (
 # _SSCPOE_CLOUD_API_URL = "http://192.168.11.234:8080/SSC_Switch/u?" # Local interface request address
 # _SSCPOE_CLOUD_API_URL = "https://www.sscee.com.cn:10443/SSC_Switch/u?" # Test server interface request address
 
-SSCPOE_KEY = "PvuhBnEsLdqhmLlx"
+SSCPOE_LOCAL_KEY = strToUtf8Bytes("EpumTpjli6zIxL1I")
+
+SSCPOE_CLOUD_KEY = "PvuhBnEsLdqhmLlx"
 
 SSCPOE_session = None
 
 
-def SSCPOE_request(act: str, dt, key: str, uid: str):
+def SSCPOE_cloud_request(act: str, dt, key: str, uid: str):
     _key = strToUtf8Bytes(key)
     _act = None
     _dt = encrypt(strToUtf8Bytes(json_to_str(dt)), _key) if dt else "undefined"
@@ -318,7 +325,7 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
             _act = "act=swtask&uid=" + uid + "&dt="
 
     if _act is None:
-        LOGGER.error(f"SSCPOE_request: Invalid act {act}")
+        LOGGER.error(f"SSCPOE_cloud_request: Invalid act {act}")
         return None
 
     url = _SSCPOE_CLOUD_API_URL + _act + quote(_dt)
@@ -337,7 +344,7 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
             SSCPOE_session = requests.Session()
         response = SSCPOE_session.get(url, headers=headers)
     except Exception as e:
-        LOGGER.exception(f"SSCPOE_request: act {act}: exception {e}")
+        LOGGER.exception(f"SSCPOE_cloud_request: act {act}: exception {e}")
         if act == "eml":
             return {"errcode": -1}
         SSCPOE_session.close()
@@ -346,23 +353,25 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
 
     if response.status_code != requests.codes.ok:
         LOGGER.warning(
-            f"SSCPOE_request: act {act}: response HTTP code: {response.status_code}"
+            f"SSCPOE_cloud_request: act {act}: response HTTP code: {response.status_code}"
         )
         return None
 
     data = dencrypt(response.text, _key)
     if data is None:
-        LOGGER.error(f"SSCPOE_request: act {act}: dencrypt({response.text}) failed")
+        LOGGER.error(
+            f"SSCPOE_cloud_request: act {act}: dencrypt({response.text}) failed"
+        )
         return None
 
     j = json.loads(data)
     if j is None:
-        LOGGER.error(f"SSCPOE_request: act {act}: Invalid JSON received: {data}")
+        LOGGER.error(f"SSCPOE_cloud_request: act {act}: Invalid JSON received: {data}")
         return None
 
     errcode = j["errcode"]
     if errcode != 0:
-        LOGGER.error(f"SSCPOE_request: act {act}: errcode: {errcode}")
+        LOGGER.error(f"SSCPOE_cloud_request: act {act}: errcode: {errcode}")
         if act != "eml":
             return None
 
@@ -372,6 +381,140 @@ def SSCPOE_request(act: str, dt, key: str, uid: str):
 SSCPOE_errcode = {
     0: "OK",
     10002: "Multiple login",
-    20004: "Invalid email",
+    20003: "Invalid email",
     20004: "Invalid password",
 }
+
+
+def SSCPOE_cloud_login(email: str, password: str):
+    eml = {
+        "email": email,
+        "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
+    }
+    j = SSCPOE_cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
+    if j is None:
+        return "unknown"
+    errcode = j["errcode"]
+    if errcode == -1:
+        return "cannot_connect"
+    elif errcode == 20003:
+        return "wrong_email"
+    elif errcode == 20004:
+        return "wrong_password"
+    elif errcode != 0:
+        return f"invalid auth code {errcode}"
+    return None
+
+
+def SSCPOE_local_syn():
+    syn = ""
+    for i in range(8):
+        r = randrange(10 + 26 + 26)
+        if r < 10:
+            syn += chr(ord("0") + r)
+        elif r < 10 + 26:
+            syn += chr(ord("a") + r - 10)
+        else:
+            syn += chr(ord("A") + r - 10 - 26)
+    return syn
+
+
+host_ip = None
+
+def get_host_ip():
+    global host_ip
+    if host_ip is None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        host_ip = sock.getsockname()[0]
+        sock.close()
+    return host_ip
+
+
+def SSCPOE_local_send(dt):
+    MCAST_GRP = "239.0.0.100"
+    MCAST_PORT = 10086
+
+    host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
+    #LOGGER.info(f"SSCPOE_local_send: host={host}")
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except AttributeError:
+        pass
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
+    sock.bind((host if platform.system() == "Windows" else MCAST_GRP, 0))
+    local_port = sock.getsockname()[1]
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
+    sock.setsockopt(
+        socket.IPPROTO_IP,
+        socket.IP_ADD_MEMBERSHIP,
+        socket.inet_aton(MCAST_GRP) + socket.inet_aton(host),
+    )
+
+    syn = SSCPOE_local_syn()
+    cmd = {"cmd": "calludp", "syn": syn, "data": dt}
+    # LOGGER.info(f"SSCPOE_local_send: {cmd}")
+    sock.sendto(
+        (encrypt(strToUtf8Bytes(json_to_str(cmd)), SSCPOE_LOCAL_KEY) + "\r\n").encode(),
+        (MCAST_GRP, MCAST_PORT),
+    )
+    sock.settimeout(1.0)
+    return sock, syn
+
+
+def SSCPOE_local_recv(sock, syn, log_timeout=True):
+    try:
+        data, addr = sock.recvfrom(1024)
+        s = str(data, encoding="utf-8")
+        if not s.endswith("\r\n"):
+            raise ValueError("Invalid EOF")
+        j = json.loads(dencrypt(s[:-2], SSCPOE_LOCAL_KEY))
+        if j["ack"] != "calludp":
+            raise ValueError("Invalid ack")
+        if j["syn"] != syn:
+            raise ValueError("Invalid syn")
+        err = j.get("errcode", 0)
+        # LOGGER.info(f"SSCPOE_local_recv: {j['data']}")
+        return j["data"], err
+    except TimeoutError:
+        # if log_timeout:
+        #    LOGGER.exception(f"SSCPOE_local_request: Timeout")
+        return None, 0
+    except Exception as e:
+        LOGGER.exception(f"SSCPOE_local_request: {e}")
+        return None, 0
+
+
+def SSCPOE_local_search():
+    sock, syn = SSCPOE_local_send({"callcmd": "search"})
+    start = time.time()
+    devices = []
+    while time.time() < start + 3:
+        d, err = SSCPOE_local_recv(sock, syn, log_timeout=False)
+        if d:
+            devices.append(d)
+    return devices
+
+
+def SSCPOE_local_request(dt):
+    sock, syn = SSCPOE_local_send(dt)
+    return SSCPOE_local_recv(sock, syn)
+
+
+def SSCPOE_local_login(sn: str, password: str):
+    j, err = SSCPOE_local_request(
+        {
+            "callcmd": "Security verification",
+            "password": password,
+            "sn": sn,
+            "command": "login",
+        }
+    )
+    if j is None:
+        return "unknown"
+    if j.get("login", "fail") != "success":
+        return "wrong_password"
+    return None

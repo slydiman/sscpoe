@@ -1,51 +1,95 @@
 from __future__ import annotations
 
-import hashlib
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import CONF_ID, CONF_EMAIL, CONF_PASSWORD
 from .const import DOMAIN, LOGGER
-from .protocol import SSCPOE_KEY, SSCPOE_request
+from .protocol import SSCPOE_local_search, SSCPOE_local_login, SSCPOE_cloud_login
 
 
 class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 4
 
-    CONNECTION_CLASS = CONN_CLASS_CLOUD_POLL
+    # CONNECTION_CLASS = CONN_CLASS_CLOUD_POLL
 
-    async def async_step_user(
-        self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
-        """Handle the initial step."""
+    local_devices: list[dict] = None
+
+    async def async_step_user(self, user_input: dict[str, str] = None) -> FlowResult:
+        if user_input:
+            if user_input["action"] == "cloud":
+                return await self.async_step_cloud()
+            else:
+                sn = user_input["action"]
+                # device = next(i for i in self.local_devices if i["sn"] == sn)
+                return self.async_show_form(
+                    step_id="local",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(CONF_ID, default=sn): str,
+                            vol.Required(CONF_PASSWORD, default="123456"): str,
+                        }
+                    ),
+                )
+
+        self.local_devices = await self.hass.async_add_executor_job(SSCPOE_local_search)
+        actions = {"cloud": "Add SSCPOE cloud account"}
+        for device in self.local_devices:
+            actions[device["sn"]] = (
+                f"Add {device['model']}, S/N: {device['sn']} ({device['ip']})"
+            )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {vol.Required("action", default="cloud"): vol.In(actions)}
+            ),
+        )
+
+    async def async_step_local(self, user_input: dict[str, str] = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input:
+            sn = user_input[CONF_ID]
+            password = user_input[CONF_PASSWORD]
+            if len(password) != 6 or not password.isdigit():
+                errors[CONF_PASSWORD] = "invalid_local_password"
+            else:
+
+                def login():
+                    return SSCPOE_local_login(sn, password)
+
+                err = await self.hass.async_add_executor_job(login)
+                if err:
+                    errors["base"] = err
+                else:
+                    return self.async_create_entry(title=sn, data=user_input)
+
+        return self.async_show_form(
+            step_id="local",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ID, default=sn if user_input else None): str,
+                    vol.Required(
+                        CONF_PASSWORD, default=password if user_input else None
+                    ): str,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_cloud(self, user_input: dict[str, str] = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
             pass_len = len(password)
             if pass_len < 6 or pass_len > 12:
-                errors[CONF_PASSWORD] = "invalid_password"
+                errors[CONF_PASSWORD] = "invalid_cloud_password"
             elif len(email) < 3:
                 errors[CONF_EMAIL] = "invalid_email"
             else:
 
                 def login():
-                    eml = {
-                        "email": email,
-                        "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
-                    }
-                    j = SSCPOE_request("eml", eml, SSCPOE_KEY, None)
-                    if j is None:
-                        return "unknown"
-                    errcode = j["errcode"]
-                    if errcode == -1:
-                        return "cannot_connect"
-                    elif errcode == 20003:
-                        return "wrong_email"
-                    elif errcode == 20004:
-                        return "wrong_password"
-                    elif errcode != 0:
-                        return f"invalid auth code {errcode}"
-                    return None
+                    return SSCPOE_cloud_login(email, password)
 
                 err = await self.hass.async_add_executor_job(login)
                 if err:
@@ -56,7 +100,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         # If there is no user input or there were errors,
         # show the form again, including any errors that were found with the input.
         return self.async_show_form(
-            step_id="user",
+            step_id="cloud",
             data_schema=vol.Schema(
                 {
                     vol.Required(
@@ -76,7 +120,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
-        self, user_input: dict[str, str] | None = None
+        self, user_input: dict[str, str] = None
     ) -> FlowResult:
         """Confirm re-authentication"""
         errors: dict[str, str] = {}
@@ -85,29 +129,13 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             password = user_input[CONF_PASSWORD]
             pass_len = len(password)
             if pass_len < 6 or pass_len > 12:
-                errors[CONF_PASSWORD] = "invalid_password"
+                errors[CONF_PASSWORD] = "invalid_cloud_password"
             elif len(email) < 3:
                 errors[CONF_EMAIL] = "invalid_email"
             else:
 
                 def login():
-                    eml = {
-                        "email": email,
-                        "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
-                    }
-                    j = SSCPOE_request("eml", eml, SSCPOE_KEY, None)
-                    if j is None:
-                        return "unknown"
-                    errcode = j["errcode"]
-                    if errcode == -1:
-                        return "cannot_connect"
-                    elif errcode == 20003:
-                        return "wrong_email"
-                    elif errcode == 20004:
-                        return "wrong_password"
-                    elif errcode != 0:
-                        return f"invalid auth code {errcode}"
-                    return None
+                    return SSCPOE_cloud_login(email, password)
 
                 err = await self.hass.async_add_executor_job(login)
                 if err:

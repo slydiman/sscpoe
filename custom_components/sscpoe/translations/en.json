@@ -6,7 +6,8 @@
         },
         "error": {
             "invalid_email": "Invalid e-mail",
-            "invalid_password": "Password must be 6..12 chars",
+            "invalid_cloud_password": "Password must be 6..12 chars",
+            "invalid_local_password": "Password must be 6 digits",
             "wrong_email": "E-mail not registered",
             "wrong_password": "Incorrect password",
             "cannot_connect": "Failed to connect",
@@ -15,6 +16,16 @@
         },
         "step": {
             "user": {
+                "title": "Select SSCPOE cloud or local"
+            },
+            "local": {
+                "title": "Fill in your SSCPOE credentials",
+                "data": {
+                    "id": "S/N",
+                    "password": "Password"
+                }
+            },
+            "cloud": {
                 "title": "Fill in your SSCPOE credentials",
                 "data": {
                     "email": "E-mail",
