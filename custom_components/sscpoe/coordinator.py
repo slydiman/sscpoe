@@ -52,9 +52,11 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         if self._sn:
             j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
             if j is None:
-                return
+                raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
+            if isinstance(j, str):
+                raise ApiAuthError(j)
             if err != 0:
-                raise ApiError(f"local errcode={err}")
+                raise ApiError(f"SSCPOE_local_request(detail, {self._sn}) errcode={err}")
             if self.prj is None:
                 self.prj = {}
                 self.prj[self.local_pid] = {"pid": self.local_pid, "name": "Local"}
@@ -84,7 +86,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 }
                 j = SSCPOE_cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
                 if j is None:
-                    raise ApiError
+                    raise ApiError("SSCPOE_cloud_request(eml): unknown")
                 if j["errcode"] != 0:
                     raise ApiAuthError(f'errcode={j["errcode"]}')
                 self._uid = j["uid"]
@@ -94,7 +96,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 if self.prj is None:
                     j = SSCPOE_cloud_request("prjmng", None, self._key, self._uid)
                     if j is None:
-                        raise ApiError
+                        raise ApiError("SSCPOE_cloud_request(prjmng): unknown")
                     self.prj = {}
                     for p in j["admin"] + j["join"]:
                         pid = p["pid"]
@@ -103,7 +105,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                             "swmng", {"pid": pid}, self._key, self._uid
                         )
                         if j is None:
-                            raise ApiError
+                            raise ApiError("SSCPOE_cloud_request(swmng): unknown")
                         p["online"] = j["online"]
                 self.devices = {}
                 for i, pid in enumerate(self.prj):
@@ -121,7 +123,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                     self._uid,
                 )
                 if j is None:
-                    raise ApiError
+                    raise ApiError("SSCPOE_cloud_request(swdet): unknown")
                 detail = j["detail"]
                 device["detail"] = detail
                 if not ("device_info" in device):
@@ -161,9 +163,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             }
         )
         if j is None:
-            raise ApiError
+            raise ApiError("SSCPOE_local_request(config): timeout")
         if err != 0:
-            raise ApiError(f"local errcode={err}")
+            raise ApiError(f"SSCPOE_local_request(config): errcode={err}")
 
     def _switch_poe_cloud(self, pid: str, sn: str, port: int, poec: bool) -> None:
         if self._uid:
@@ -174,7 +176,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             }
             j = SSCPOE_cloud_request("swconf", swconf, self._key, self._uid)
             if j is None:
-                raise ApiError
+                raise ApiError("SSCPOE_cloud_request(swconf): unknown")
 
 
 class ApiError(HomeAssistantError):

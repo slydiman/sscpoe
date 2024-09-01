@@ -4,7 +4,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
 from homeassistant.const import CONF_ID, CONF_EMAIL, CONF_PASSWORD
 from .const import DOMAIN, LOGGER
-from .protocol import SSCPOE_local_search, SSCPOE_local_login, SSCPOE_cloud_login
+from .protocol import (
+    SSCPOE_local_search,
+    SSCPOE_local_login,
+    SSCPOE_cloud_login,
+)
 
 
 class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -20,7 +24,6 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_cloud()
             else:
                 sn = user_input["action"]
-                # device = next(i for i in self.local_devices if i["sn"] == sn)
                 return self.async_show_form(
                     step_id="local",
                     data_schema=vol.Schema(
@@ -34,8 +37,9 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         self.local_devices = await self.hass.async_add_executor_job(SSCPOE_local_search)
         actions = {"cloud": "Add SSCPOE cloud account"}
         for device in self.local_devices:
+            activate = " Not activated!" if device["Active_state"] != "active" else ""
             actions[device["sn"]] = (
-                f"Add {device['model']}, S/N: {device['sn']} ({device['ip']})"
+                f"Add {device['model']}, S/N: {device['sn']} ({device['ip']}){activate}"
             )
 
         return self.async_show_form(
@@ -57,7 +61,14 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 def login():
                     return SSCPOE_local_login(sn, password)
 
-                err = await self.hass.async_add_executor_job(login)
+                def activate():
+                    return SSCPOE_local_login(sn, password, "activate")
+
+                device = next(i for i in self.local_devices if i["sn"] == sn)
+                if device["Active_state"] != "active":
+                    err = await self.hass.async_add_executor_job(activate)
+                else:
+                    err = await self.hass.async_add_executor_job(login)
                 if err:
                     errors["base"] = err
                 else:
@@ -124,40 +135,72 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Confirm re-authentication"""
         errors: dict[str, str] = {}
+        sn = self.entry.data.get(CONF_ID)
         if user_input:
-            email = user_input[CONF_EMAIL]
+            sn = user_input.get(CONF_ID, sn)
+            email = user_input.get(CONF_EMAIL, None)
             password = user_input[CONF_PASSWORD]
-            pass_len = len(password)
-            if pass_len < 6 or pass_len > 12:
-                errors[CONF_PASSWORD] = "invalid_cloud_password"
-            elif len(email) < 3:
-                errors[CONF_EMAIL] = "invalid_email"
-            else:
-
-                def login():
-                    return SSCPOE_cloud_login(email, password)
-
-                err = await self.hass.async_add_executor_job(login)
-                if err:
-                    errors["base"] = err
+            if sn:
+                if len(password) != 6 or not password.isdigit():
+                    errors[CONF_PASSWORD] = "invalid_local_password"
                 else:
-                    assert self.entry is not None
 
-                    self.hass.config_entries.async_update_entry(
-                        self.entry,
-                        data={
-                            **self.entry.data,
-                            CONF_EMAIL: email,
-                            CONF_PASSWORD: password,
-                        },
-                    )
+                    def login():
+                        return SSCPOE_local_login(sn, password, "activate")
 
-                    await self.hass.config_entries.async_reload(self.entry.entry_id)
-                    return self.async_abort(reason="reauth_successful")
+                    err = await self.hass.async_add_executor_job(login)
+                    if err:
+                        errors["base"] = err
+                    else:
+                        assert self.entry is not None
+                        self.hass.config_entries.async_update_entry(
+                            self.entry,
+                            data={
+                                **self.entry.data,
+                                CONF_ID: sn,
+                                CONF_PASSWORD: password,
+                            },
+                        )
+                        await self.hass.config_entries.async_reload(self.entry.entry_id)
+                        return self.async_abort(reason="reauth_successful")
+            else:
+                pass_len = len(password)
+                if pass_len < 6 or pass_len > 12:
+                    errors[CONF_PASSWORD] = "invalid_cloud_password"
+                elif len(email) < 3:
+                    errors[CONF_EMAIL] = "invalid_email"
+                else:
 
-        return self.async_show_form(
-            step_id="reauth_confirm",
-            data_schema=vol.Schema(
+                    def login():
+                        return SSCPOE_cloud_login(email, password)
+
+                    err = await self.hass.async_add_executor_job(login)
+                    if err:
+                        errors["base"] = err
+                    else:
+                        assert self.entry is not None
+                        self.hass.config_entries.async_update_entry(
+                            self.entry,
+                            data={
+                                **self.entry.data,
+                                CONF_EMAIL: email,
+                                CONF_PASSWORD: password,
+                            },
+                        )
+                        await self.hass.config_entries.async_reload(self.entry.entry_id)
+                        return self.async_abort(reason="reauth_successful")
+
+        if sn:
+            data_schema = vol.Schema(
+                {
+                    vol.Required(CONF_ID, default=sn): str,
+                    vol.Required(
+                        CONF_PASSWORD, default=password if user_input else None
+                    ): str,
+                }
+            )
+        else:
+            data_schema = vol.Schema(
                 {
                     vol.Required(
                         CONF_EMAIL, default=email if user_input else None
@@ -166,6 +209,10 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PASSWORD, default=password if user_input else None
                     ): str,
                 }
-            ),
+            )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=data_schema,
             errors=errors,
         )

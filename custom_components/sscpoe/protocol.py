@@ -421,6 +421,7 @@ def SSCPOE_local_syn():
 
 host_ip = None
 
+
 def get_host_ip():
     global host_ip
     if host_ip is None:
@@ -428,6 +429,7 @@ def get_host_ip():
         sock.connect(("8.8.8.8", 80))
         host_ip = sock.getsockname()[0]
         sock.close()
+        LOGGER.debug(f"SSCPOE get_host_ip: {host_ip}")
     return host_ip
 
 
@@ -436,7 +438,6 @@ def SSCPOE_local_send(dt):
     MCAST_PORT = 10086
 
     host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
-    #LOGGER.info(f"SSCPOE_local_send: host={host}")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
@@ -456,35 +457,34 @@ def SSCPOE_local_send(dt):
 
     syn = SSCPOE_local_syn()
     cmd = {"cmd": "calludp", "syn": syn, "data": dt}
-    # LOGGER.info(f"SSCPOE_local_send: {cmd}")
+    LOGGER.debug(f"SSCPOE_local_send: {cmd}")
     sock.sendto(
         (encrypt(strToUtf8Bytes(json_to_str(cmd)), SSCPOE_LOCAL_KEY) + "\r\n").encode(),
         (MCAST_GRP, MCAST_PORT),
     )
-    sock.settimeout(1.0)
+    sock.settimeout(2.0)
     return sock, syn
 
 
-def SSCPOE_local_recv(sock, syn, log_timeout=True):
+def SSCPOE_local_recv(sock, syn):
     try:
         data, addr = sock.recvfrom(1024)
         s = str(data, encoding="utf-8")
         if not s.endswith("\r\n"):
-            raise ValueError("Invalid EOF")
+            raise ValueError(f"Invalid EOF: '{s}'")
         j = json.loads(dencrypt(s[:-2], SSCPOE_LOCAL_KEY))
+        LOGGER.debug(f"SSCPOE_local_recv: {j}")
         if j["ack"] != "calludp":
-            raise ValueError("Invalid ack")
+            raise ValueError(f"Invalid ack: {j}")
         if j["syn"] != syn:
-            raise ValueError("Invalid syn")
+            raise ValueError(f"Invalid syn: {j}")
         err = j.get("errcode", 0)
-        # LOGGER.info(f"SSCPOE_local_recv: {j['data']}")
         return j["data"], err
     except TimeoutError:
-        # if log_timeout:
-        #    LOGGER.exception(f"SSCPOE_local_request: Timeout")
+        LOGGER.debug(f"SSCPOE_local_recv: Timeout")
         return None, 0
     except Exception as e:
-        LOGGER.exception(f"SSCPOE_local_request: {e}")
+        LOGGER.exception(f"SSCPOE_local_recv: {e}")
         return None, 0
 
 
@@ -493,28 +493,31 @@ def SSCPOE_local_search():
     start = time.time()
     devices = []
     while time.time() < start + 3:
-        d, err = SSCPOE_local_recv(sock, syn, log_timeout=False)
+        d, err = SSCPOE_local_recv(sock, syn)
         if d:
             devices.append(d)
+    sock.close()
     return devices
 
 
 def SSCPOE_local_request(dt):
     sock, syn = SSCPOE_local_send(dt)
-    return SSCPOE_local_recv(sock, syn)
+    res = SSCPOE_local_recv(sock, syn)
+    sock.close()
+    return res
 
 
-def SSCPOE_local_login(sn: str, password: str):
+def SSCPOE_local_login(sn: str, password: str, cmd="login"):
     j, err = SSCPOE_local_request(
         {
             "callcmd": "Security verification",
             "password": password,
             "sn": sn,
-            "command": "login",
+            "command": cmd,
         }
     )
     if j is None:
         return "unknown"
-    if j.get("login", "fail") != "success":
+    if j.get(cmd, "fail") != "success":
         return "wrong_password"
     return None

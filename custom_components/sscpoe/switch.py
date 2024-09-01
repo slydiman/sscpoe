@@ -17,11 +17,12 @@ async def async_setup_entry(
     coordinator: SSCPOE_Coordinator = hass.data[DOMAIN][config_entry.entry_id]
     new_devices = []
 
-    for i, sn in enumerate(coordinator.devices):
-        device = coordinator.devices[sn]
-        ports = len(device["detail"]["poec"])
-        for port in range(ports):
-            new_devices.append(POEPortSwitch(coordinator, sn, port))
+    if coordinator.devices:
+        for i, sn in enumerate(coordinator.devices):
+            device = coordinator.devices[sn]
+            ports = len(device["detail"]["poec"])
+            for port in range(ports):
+                new_devices.append(POEPortSwitch(coordinator, sn, port))
 
     if new_devices:
         async_add_entities(new_devices)
