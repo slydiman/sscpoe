@@ -17,7 +17,7 @@ from .protocol import SSCPOE_CLOUD_KEY, SSCPOE_cloud_request, SSCPOE_local_reque
 
 class SSCPOE_Coordinator(DataUpdateCoordinator):
 
-    local_pid = "local"
+    LOCAL_PID = "local"
 
     def __init__(self, hass: HomeAssistant, sn: str, email: str, password: str):
         self._sn = sn
@@ -34,6 +34,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
+
+    def reverse_order(self, sn: str) -> bool:
+        return sn.startswith("GPS")
 
     async def _async_update_data(self) -> None:
         try:
@@ -56,13 +59,15 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             if isinstance(j, str):
                 raise ApiAuthError(j)
             if err != 0:
-                raise ApiError(f"SSCPOE_local_request(detail, {self._sn}) errcode={err}")
+                raise ApiError(
+                    f"SSCPOE_local_request(detail, {self._sn}) errcode={err}"
+                )
             if self.prj is None:
                 self.prj = {}
-                self.prj[self.local_pid] = {"pid": self.local_pid, "name": "Local"}
+                self.prj[self.LOCAL_PID] = {"pid": self.LOCAL_PID, "name": "Local"}
             if self.devices is None:
                 self.devices = {}
-                self.devices[self._sn] = {"pid": self.local_pid, "sn": self._sn}
+                self.devices[self._sn] = {"pid": self.LOCAL_PID, "sn": self._sn}
             device = self.devices[self._sn]
             detail = j["calldata"]
             detail["name"] = self._sn
@@ -138,27 +143,29 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                         },  # ,(CONF_IP_ADDRESS, self._device.detail['ip'])
                     )
 
-    async def _async_switch_poe(self, pid: str, sn: str, port: int, poec: bool) -> None:
+    async def _async_switch_poe(
+        self, pid: str, sn: str, index: int, poec: bool
+    ) -> None:
         try:
-            if self._sn:
+            if pid == self.LOCAL_PID:
                 async with async_timeout.timeout(2):
                     return await self.hass.async_add_executor_job(
-                        self._switch_poe_local, self._sn, port, poec
+                        self._switch_poe_local, sn, index, poec
                     )
-            elif self._email:
+            else:
                 async with async_timeout.timeout(10):
                     return await self.hass.async_add_executor_job(
-                        self._switch_poe_cloud, pid, sn, port, poec
+                        self._switch_poe_cloud, pid, sn, index, poec
                     )
         except ApiError as err:
             self._uid = None
             raise UpdateFailed(f"Error communicating with API: {err}")
 
-    def _switch_poe_local(self, sn: str, port: int, poec: bool) -> None:
+    def _switch_poe_local(self, sn: str, index: int, poec: bool) -> None:
         j, err = SSCPOE_local_request(
             {
                 "callcmd": "config",
-                "calldata": {"opcode": (0x202 if poec else 2) | (port << 4)},
+                "calldata": {"opcode": (0x202 if poec else 2) | (index << 4)},
                 "sn": self._sn,
             }
         )
@@ -167,12 +174,12 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         if err != 0:
             raise ApiError(f"SSCPOE_local_request(config): errcode={err}")
 
-    def _switch_poe_cloud(self, pid: str, sn: str, port: int, poec: bool) -> None:
+    def _switch_poe_cloud(self, pid: str, sn: str, index: int, poec: bool) -> None:
         if self._uid:
             swconf = {
                 "pid": pid,
                 "sn": sn,
-                "opcode": (0x202 if poec else 2) | (port << 4),
+                "opcode": (0x202 if poec else 2) | (index << 4),
             }
             j = SSCPOE_cloud_request("swconf", swconf, self._key, self._uid)
             if j is None:
