@@ -20,14 +20,18 @@ async def async_setup_entry(
     if coordinator.devices:
         for i, sn in enumerate(coordinator.devices):
             device = coordinator.devices[sn]
-            ports = len(device["detail"]["poec"])
-            reverse = (ports - 1) if coordinator.reverse_order(sn) else 0
-            for port in range(ports):
-                new_devices.append(
-                    POEPortSwitch(
-                        coordinator, sn, port+1, (reverse - port) if reverse else port
+            if "poec" in device["detail"]:
+                ports = len(device["detail"]["poec"])
+                reverse = (ports - 1) if coordinator.reverse_order(sn) else 0
+                for port in range(ports):
+                    new_devices.append(
+                        POEPortSwitch(
+                            coordinator,
+                            sn,
+                            port + 1,
+                            (reverse - port) if reverse else port,
+                        )
                     )
-                )
 
     if new_devices:
         async_add_entities(new_devices)
@@ -41,15 +45,15 @@ class POEPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         self._pid = device["pid"]
         detail = device["detail"]
         prj_name = (
-            coordinator.prj[self._pid]["name"] + "/"
+            f"{coordinator.prj[self._pid]['name']}/{detail['name']} "
             if self._pid != SSCPOE_Coordinator.LOCAL_PID
             else ""
         )
-        local = "local_" if self._pid == SSCPOE_Coordinator.LOCAL_PID else ""
+        cloud = "cloud_" if self._pid != SSCPOE_Coordinator.LOCAL_PID else ""
         super().__init__(coordinator, context=(self._pid, sn))
-        self._attr_name = f"{prj_name}{detail['name']} Port {port} POE"
-        self._attr_unique_id = f"{local}{sn}_{port}_switch".lower()
-        self.entity_id = f"{DOMAIN}.{local}{sn}_{port}_switch".lower()
+        self._attr_name = f"{prj_name}Port {port} POE"
+        self._attr_unique_id = f"{cloud}{sn}_{port}_switch".lower()
+        self.entity_id = f"{DOMAIN}.{cloud}{sn}_{port}_switch".lower()
         self._attr_device_info = device["device_info"]
 
     @property

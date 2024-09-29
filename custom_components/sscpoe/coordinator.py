@@ -36,7 +36,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         )
 
     def reverse_order(self, sn: str) -> bool:
-        return sn.startswith("GPS")
+        # Correct port order: PS308G, GPS316.
+        # Reverse port order: GPS204, GPS208, some GPS1xx.
+        return sn.startswith("GPS1") or sn.startswith("GPS2")
 
     async def _async_update_data(self) -> None:
         try:
