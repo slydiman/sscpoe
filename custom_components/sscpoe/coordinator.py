@@ -57,7 +57,10 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         if self._sn:
             j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
             if j is None:
-                raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
+                # Second try
+                j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
+                if j is None:
+                    raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
             if isinstance(j, str):
                 raise ApiAuthError(j)
             if err != 0:

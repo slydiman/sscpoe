@@ -502,9 +502,9 @@ def SSCPOE_local_search():
 
 def SSCPOE_local_request(dt):
     sock, syn = SSCPOE_local_send(dt)
-    res = SSCPOE_local_recv(sock, syn)
+    d, err = SSCPOE_local_recv(sock, syn)
     sock.close()
-    return res
+    return d, err
 
 
 def SSCPOE_local_login(sn: str, password: str, cmd="login"):

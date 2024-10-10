@@ -9,6 +9,6 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/slydiman/sscpoe/issues",
   "requirements": ["requests"],
-  "version": "2024.09.30",
+  "version": "2024.10.11",
   "zeroconf": []
 }
