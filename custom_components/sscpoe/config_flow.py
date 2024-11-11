@@ -146,7 +146,10 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
 
                     def login():
-                        return SSCPOE_local_login(sn, password, "activate")
+                        res = SSCPOE_local_login(sn, password, "activate")
+                        if res:
+                            res = SSCPOE_local_login(sn, password)
+                        return res
 
                     err = await self.hass.async_add_executor_job(login)
                     if err:

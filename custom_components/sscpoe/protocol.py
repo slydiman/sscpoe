@@ -198,6 +198,7 @@ SSCPOE_session = None
 def SSCPOE_cloud_request(act: str, dt, key: str, uid: str):
     _key = strToUtf8Bytes(key)
     _act = None
+    LOGGER.debug(f"SSCPOE_cloud_request: act {act} request: {dt}")
     _dt = encrypt(strToUtf8Bytes(json_to_str(dt)), _key) if dt else "undefined"
 
     match act:
@@ -368,6 +369,8 @@ def SSCPOE_cloud_request(act: str, dt, key: str, uid: str):
     if j is None:
         LOGGER.error(f"SSCPOE_cloud_request: act {act}: Invalid JSON received: {data}")
         return None
+
+    LOGGER.debug(f"SSCPOE_cloud_request: act {act} response: {j}")
 
     errcode = j["errcode"]
     if errcode != 0:
