@@ -12,7 +12,13 @@ import hashlib
 import async_timeout
 from datetime import timedelta
 from .const import DOMAIN, LOGGER
-from .protocol import SSCPOE_CLOUD_KEY, SSCPOE_cloud_request, SSCPOE_local_request
+from .protocol import (
+    SSCPOE_CLOUD_KEY,
+    SSCPOE_LOCAL_DEF_PASSWORD,
+    SSCPOE_cloud_request,
+    SSCPOE_local_request,
+    SSCPOE_local_login,
+)
 
 
 class SSCPOE_Coordinator(DataUpdateCoordinator):
@@ -62,7 +68,24 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 if j is None:
                     raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
             if isinstance(j, str):
-                raise ApiAuthError(j)
+                LOGGER.debug(
+                    f"SSCPOE_Coordinator._fetch_data: login/activate with the default passowrd."
+                )
+                if (
+                    SSCPOE_local_login(self._sn, SSCPOE_LOCAL_DEF_PASSWORD) in None
+                    or SSCPOE_local_login(
+                        self._sn, SSCPOE_LOCAL_DEF_PASSWORD, "activate"
+                    )
+                    in None
+                ):
+                    # Second try after login/activate.
+                    j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
+                    if j is None:
+                        raise ApiError(
+                            f"SSCPOE_local_request(detail, {self._sn}): timeout"
+                        )
+                if isinstance(j, str):
+                    raise ApiAuthError(j)
             if err != 0:
                 raise ApiError(
                     f"SSCPOE_local_request(detail, {self._sn}) errcode={err}"

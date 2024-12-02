@@ -510,6 +510,9 @@ def SSCPOE_local_request(dt):
     return d, err
 
 
+SSCPOE_LOCAL_DEF_PASSWORD = "123456"
+
+
 def SSCPOE_local_login(sn: str, password: str, cmd="login"):
     j, err = SSCPOE_local_request(
         {
