@@ -27,7 +27,7 @@ async def async_setup_entry(
     new_devices = []
 
     if coordinator.devices:
-        for i, sn in enumerate(coordinator.devices):
+        for d, sn in enumerate(coordinator.devices):
             detail = coordinator.devices[sn]["detail"]
 
             if "vol" in detail:
@@ -52,52 +52,66 @@ async def async_setup_entry(
             elif "poec" in detail:
                 ports = len(detail["poec"])
 
-            reverse = (ports - 1) if coordinator.reverse_order(sn) else 0
-
+            reverse = coordinator.reverse_order(sn)
             if "pw" in detail:
-                for port in range(ports):
+                for i in range(ports):
                     new_devices.append(
                         PortPowerSensor(
-                            coordinator,
-                            sn,
-                            port + 1,
-                            (reverse - port) if reverse else port,
+                            coordinator, sn, i + 1, (ports - 1 - i) if reverse else i
                         )
                     )
 
-            for port in range(lans):
+            for i in range(lans):
                 if "link" in detail:
                     new_devices.append(
                         PortLinkSensor(
-                            coordinator,
-                            sn,
-                            port + 1,
-                            (reverse - port) if reverse else port,
+                            coordinator, sn, -1 - i, (lans - 1 - i) if reverse else i
                         )
-                        if port < ports
-                        else PortLinkSensor(coordinator, sn, ports - port - 1, port)
+                        if ports == 0
+                        else (
+                            PortLinkSensor(
+                                coordinator,
+                                sn,
+                                i + 1,
+                                (ports - 1 - i) if reverse else i,
+                            )
+                            if i < ports
+                            else PortLinkSensor(coordinator, sn, ports - i - 1, i)
+                        )
                     )
                 if "rx" in detail:
                     new_devices.append(
                         PortRxSensor(
-                            coordinator,
-                            sn,
-                            port + 1,
-                            (reverse - port) if reverse else port,
+                            coordinator, sn, -1 - i, (lans - 1 - i) if reverse else i
                         )
-                        if port < ports
-                        else PortRxSensor(coordinator, sn, ports - port - 1, port)
+                        if ports == 0
+                        else (
+                            PortRxSensor(
+                                coordinator,
+                                sn,
+                                i + 1,
+                                (ports - 1 - i) if reverse else i,
+                            )
+                            if i < ports
+                            else PortRxSensor(coordinator, sn, ports - i - 1, i)
+                        )
                     )
                 if "tx" in detail:
                     new_devices.append(
                         PortTxSensor(
-                            coordinator,
-                            sn,
-                            port + 1,
-                            (reverse - port) if reverse else port,
+                            coordinator, sn, -1 - i, (lans - 1 - i) if reverse else i
                         )
-                        if port < ports
-                        else PortTxSensor(coordinator, sn, ports - port - 1, port)
+                        if ports == 0
+                        else (
+                            PortTxSensor(
+                                coordinator,
+                                sn,
+                                i + 1,
+                                (ports - 1 - i) if reverse else i,
+                            )
+                            if i < ports
+                            else PortTxSensor(coordinator, sn, ports - i - 1, i)
+                        )
                     )
 
     if new_devices:

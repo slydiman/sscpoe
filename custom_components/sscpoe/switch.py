@@ -18,18 +18,18 @@ async def async_setup_entry(
     new_devices = []
 
     if coordinator.devices:
-        for i, sn in enumerate(coordinator.devices):
+        for d, sn in enumerate(coordinator.devices):
             device = coordinator.devices[sn]
             if "poec" in device["detail"]:
                 ports = len(device["detail"]["poec"])
-                reverse = (ports - 1) if coordinator.reverse_order(sn) else 0
-                for port in range(ports):
+                reverse = coordinator.reverse_order(sn)
+                for i in range(ports):
                     new_devices.append(
                         POEPortSwitch(
                             coordinator,
                             sn,
-                            port + 1,
-                            (reverse - port) if reverse else port,
+                            i + 1,
+                            (ports - 1 - i) if reverse else i,
                         )
                     )
 

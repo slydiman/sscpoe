@@ -43,8 +43,8 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     def reverse_order(self, sn: str) -> bool:
         # Correct port order: PS308G, GPS316.
-        # Reverse port order: GPS204, GPS208, some GPS1xx.
-        return sn.startswith("GPS1") or sn.startswith("GPS2")
+        # Reverse port order: GPS204, GPS208, GPS1xx, GS105.
+        return sn.startswith("GPS1") or sn.startswith("GPS2") or sn.startswith("GS1")
 
     async def _async_update_data(self) -> None:
         try:
@@ -72,7 +72,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                     f"SSCPOE_Coordinator._fetch_data: login/activate with the default passowrd."
                 )
                 if (
-                    SSCPOE_local_login(self._sn, SSCPOE_LOCAL_DEF_PASSWORD) in None
+                    SSCPOE_local_login(self._sn, SSCPOE_LOCAL_DEF_PASSWORD) is None
                     or SSCPOE_local_login(
                         self._sn, SSCPOE_LOCAL_DEF_PASSWORD, "activate"
                     )
@@ -101,10 +101,21 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             detail["name"] = self._sn
             device["detail"] = detail
             if not ("device_info" in device):
+                model = self._sn[0:6]
+                if (
+                    model[0].isalpha()
+                    and model[1].isalpha()
+                    and model[2].isdigit()
+                    and model[3].isdigit()
+                    and model[4].isdigit()
+                    and model[5].isdigit()
+                ):
+                    # Model may be AAADDD###, AADDDA### or AADDD### (GS105)
+                    model = model[:-1]
                 device["device_info"] = DeviceInfo(
                     identifiers={(DOMAIN, self._sn)},
                     manufacturer="STEAMEMO",
-                    model=self._sn[0:6],
+                    model=model,
                     name=detail["name"],
                     sw_version=detail["V"],
                     connections={
