@@ -186,43 +186,82 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self, pid: str, sn: str, index: int, poec: bool
     ) -> None:
         try:
-            if pid == self.LOCAL_PID:
-                async with async_timeout.timeout(2):
-                    return await self.hass.async_add_executor_job(
-                        self._switch_poe_local, sn, index, poec
-                    )
-            else:
-                async with async_timeout.timeout(10):
-                    return await self.hass.async_add_executor_job(
-                        self._switch_poe_cloud, pid, sn, index, poec
-                    )
-        except ApiError as err:
+            async with async_timeout.timeout(2 if pid == self.LOCAL_PID else 10):
+                return await self.hass.async_add_executor_job(
+                    self._switch_poe, pid, sn, index, poec
+                )
+        except ApiError as ex:
             self._uid = None
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            raise UpdateFailed(f"Error communicating with API: {ex}")
 
-    def _switch_poe_local(self, sn: str, index: int, poec: bool) -> None:
+    async def _async_switch_extend(
+        self, pid: str, sn: str, index: int, extend: bool
+    ) -> None:
+        try:
+            async with async_timeout.timeout(2 if pid == self.LOCAL_PID else 10):
+                return await self.hass.async_add_executor_job(
+                    self._switch_extend, pid, sn, index, extend
+                )
+        except ApiError as ex:
+            self._uid = None
+            raise UpdateFailed(f"Error communicating with API: {ex}")
+
+    def _switch_poe(self, pid: str, sn: str, index: int, poec: bool) -> None:
+        opcode = (0x202 if poec else 2) | (index << 4)
+        err = self._switch(pid, sn, index, opcode)
+        if err != 0:
+            self._uid = None
+            raise UpdateFailed(f"_switch_poe: errcode={err}")
+
+    def _switch_extend(self, pid: str, sn: str, index: int, extend: bool) -> None:
+        # 0x200: phyc = 1: 10MBit half duplex
+        # 0x400: phyc = 2: 10MBit full duplex
+        # 0x800: phyc = 4: 100MBit full duplex
+        # 0xA00: phyc = 5: 1GBit full duplex
+        # 0xC00: err=1001 # GS105
+        opcode = (0x400 if extend else 0xA00) | (index << 4)
+        for i in range(2):
+            err = self._switch(pid, sn, index, opcode)
+            if err == 0:
+                break
+            if i == 0 and err == 1001:
+                opcode = (0x200 if extend else 0x800) | (index << 4)
+                continue
+            self._uid = None
+            raise UpdateFailed(f"_switch_extend: errcode={err}")
+
+    def _switch(self, pid: str, sn: str, index: int, opcode: int) -> int:
+        return (
+            self._switch_local(sn, index, opcode)
+            if pid == self.LOCAL_PID
+            else self._switch_cloud(pid, sn, index, opcode)
+        )
+
+    def _switch_local(self, sn: str, index: int, opcode: int) -> int:
         j, err = SSCPOE_local_request(
             {
                 "callcmd": "config",
-                "calldata": {"opcode": (0x202 if poec else 2) | (index << 4)},
+                "calldata": {"opcode": opcode},
                 "sn": self._sn,
             }
         )
         if j is None:
             raise ApiError("SSCPOE_local_request(config): timeout")
-        if err != 0:
-            raise ApiError(f"SSCPOE_local_request(config): errcode={err}")
+        return err
 
-    def _switch_poe_cloud(self, pid: str, sn: str, index: int, poec: bool) -> None:
-        if self._uid:
-            swconf = {
-                "pid": pid,
-                "sn": sn,
-                "opcode": (0x202 if poec else 2) | (index << 4),
-            }
-            j = SSCPOE_cloud_request("swconf", swconf, self._key, self._uid)
-            if j is None:
-                raise ApiError("SSCPOE_cloud_request(swconf): unknown")
+    def _switch_cloud(self, pid: str, sn: str, index: int, opcode: int) -> int:
+        if self._uid is None:
+            return 10001
+        swconf = {
+            "pid": pid,
+            "sn": sn,
+            "opcode": opcode,
+        }
+        j = SSCPOE_cloud_request("swconf", swconf, self._key, self._uid)
+        if j is None:
+            raise ApiError("SSCPOE_cloud_request(swconf): unknown")
+        err = int(j["data"]["errcode"])
+        return err
 
 
 class ApiError(HomeAssistantError):

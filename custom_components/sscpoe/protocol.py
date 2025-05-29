@@ -400,6 +400,8 @@ def SSCPOE_cloud_login(email: str, password: str):
     errcode = j["errcode"]
     if errcode == -1:
         return "cannot_connect"
+    elif errcode == 1001:
+        return "invalid_arg"
     elif errcode == 20003:
         return "wrong_email"
     elif errcode == 20004:
