@@ -76,7 +76,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                     or SSCPOE_local_login(
                         self._sn, SSCPOE_LOCAL_DEF_PASSWORD, "activate"
                     )
-                    in None
+                    is None
                 ):
                     # Second try after login/activate.
                     j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
