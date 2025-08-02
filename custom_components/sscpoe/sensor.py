@@ -157,13 +157,19 @@ class PortBaseSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self._attr_native_value = self._handle_coordinator_update_fix(
-            self.coordinator.devices[self._sn]["detail"][self._total_key]
-            if self._index < 0
-            else self.coordinator.devices[self._sn]["detail"][self._port_key][
-                self._index
-            ]
-        )
+        try:
+            val = (
+                self.coordinator.devices[self._sn]["detail"][self._total_key]
+                if self._index < 0
+                else self.coordinator.devices[self._sn]["detail"][self._port_key][
+                    self._index
+                ]
+            )
+            self._attr_native_value = self._handle_coordinator_update_fix(val)
+        except ValueError:
+            LOGGER.error(
+                f"SSCPOE sensor {self._attr_unique_id}: Invalid value '{val}', detail={self.coordinator.devices[self._sn]['detail']}"
+            )
         self.async_write_ha_state()
         super()._handle_coordinator_update()
 
@@ -189,6 +195,10 @@ class VoltageSensor(PortBaseSensor):
     _id_name = "voltage"
     _total_key = "vol"
 
+    def _handle_coordinator_update_fix(self, val):
+        test = float(val)
+        return val
+
 
 class PortPowerSensor(PortBaseSensor):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -201,6 +211,10 @@ class PortPowerSensor(PortBaseSensor):
     _total_key = "tp"
     _port_key = "pw"
     _total = True
+
+    def _handle_coordinator_update_fix(self, val):
+        test = float(val)
+        return val
 
 
 class PortRxSensor(PortBaseSensor):
