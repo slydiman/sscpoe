@@ -214,6 +214,9 @@ class PortPowerSensor(PortBaseSensor):
 
     def _handle_coordinator_update_fix(self, val):
         test = float(val)
+        # Total power x1000 workaround for the firmware 6.0.250513+
+        if self._index < 0 and test > 240.0:
+            val = test / 1000.0
         return val
 
 
