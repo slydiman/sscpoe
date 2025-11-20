@@ -54,7 +54,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input:
             sn = user_input[CONF_ID]
             password = user_input[CONF_PASSWORD]
-            if len(password) != 6 or not password.isdigit():
+            pass_len = len(password)
+            if pass_len < 6 or pass_len > 12:
                 errors[CONF_PASSWORD] = "invalid_local_password"
             else:
 
@@ -141,7 +142,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             email = user_input.get(CONF_EMAIL, None)
             password = user_input[CONF_PASSWORD]
             if sn:
-                if len(password) != 6 or not password.isdigit():
+                pass_len = len(password)
+                if pass_len < 6 or pass_len > 12:
                     errors[CONF_PASSWORD] = "invalid_local_password"
                 else:
 
