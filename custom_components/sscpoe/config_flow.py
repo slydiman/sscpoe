@@ -10,6 +10,9 @@ from .protocol import (
     SSCPOE_cloud_login,
 )
 
+def bad_password(password):
+    pass_len = len(password)
+    return (pass_len < 6 or pass_len > 12)
 
 class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 4
@@ -54,7 +57,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input:
             sn = user_input[CONF_ID]
             password = user_input[CONF_PASSWORD]
-            if len(password) != 6 or not password.isdigit():
+            if bad_password(password):
                 errors[CONF_PASSWORD] = "invalid_local_password"
             else:
 
@@ -92,8 +95,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
-            pass_len = len(password)
-            if pass_len < 6 or pass_len > 12:
+            if bad_password(password):
                 errors[CONF_PASSWORD] = "invalid_cloud_password"
             elif len(email) < 3:
                 errors[CONF_EMAIL] = "invalid_email"
@@ -141,7 +143,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             email = user_input.get(CONF_EMAIL, None)
             password = user_input[CONF_PASSWORD]
             if sn:
-                if len(password) != 6 or not password.isdigit():
+                if bad_password(password):
                     errors[CONF_PASSWORD] = "invalid_local_password"
                 else:
 
@@ -167,8 +169,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                         await self.hass.config_entries.async_reload(self.entry.entry_id)
                         return self.async_abort(reason="reauth_successful")
             else:
-                pass_len = len(password)
-                if pass_len < 6 or pass_len > 12:
+                if bad_password(password):
                     errors[CONF_PASSWORD] = "invalid_cloud_password"
                 elif len(email) < 3:
                     errors[CONF_EMAIL] = "invalid_email"
