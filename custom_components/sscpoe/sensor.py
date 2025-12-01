@@ -135,10 +135,10 @@ class PortBaseSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
         detail = device["detail"]
         prj_name = (
             f"{coordinator.prj[pid]['name']}/{detail['name']} "
-            if pid != SSCPOE_Coordinator.LOCAL_PID
+            if SSCPOE_Coordinator.is_cloud(pid)
             else ""
         )
-        cloud = "cloud_" if pid != SSCPOE_Coordinator.LOCAL_PID else ""
+        cloud = "cloud_" if SSCPOE_Coordinator.is_cloud(pid) else ""
         if index < 0:
             Total = "Total " if self._total else ""
             total = "total_" if self._total else ""
@@ -177,7 +177,17 @@ class PortBaseSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
         return val
 
     def _kb2mb(self, val):
-        return ("0." + val) if (isinstance(val, str) and val.find(".") < 0) else val
+        if isinstance(val, str) and val.find(".") < 0:
+            l = len(val)
+            if l == 1:
+                return "0.00" + val
+            elif l == 2:
+                return "0.0" + val
+            elif l == 3:
+                return "0." + val
+            elif l > 3:
+                return val[:-3] + "." + val[-3:]
+        return val
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""

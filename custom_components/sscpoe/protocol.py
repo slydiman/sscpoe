@@ -10,6 +10,9 @@ from urllib.parse import quote
 from random import randrange
 from .const import LOGGER
 
+# _USER_AGENT = "Mozilla/5.0 (Linux; Android 12)"
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+
 TIMES = 32  # The number of iterations is recommended to be an integer multiple of 8.
 # The receiving and sending ends must be unified, otherwise it cannot be decrypted.
 DELTA = 0x9E3779B9  # This is the value given by the algorithm standard and cannot be modified.
@@ -528,4 +531,195 @@ def SSCPOE_local_login(sn: str, password: str, cmd="login"):
         return "unknown"
     if j.get(cmd, "fail") != "success":
         return "wrong_password"
+    return None
+
+
+def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
+    headers = {
+        "X-Requested-With": "XMLHttpRequest",
+        "Connection": "keep-alive",
+        "User-Agent": _USER_AGENT,
+        "Content-Type": "application/json; charset=UTF-8",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Host": ip,
+        "Origin": f"http://{ip}",
+        "Referer": f"http://{ip}/",
+    }
+
+    if uid:
+        cookie = ""
+        for i, key in enumerate(uid):
+            if cookie:
+                cookie += "; "
+            cookie += f"{key}="
+        headers["Cookie"] = cookie
+
+    data = {"callcmd": callcmd}
+    if calldata:
+        data["calldata"] = calldata
+
+    data = {"data": data}
+
+    url = f"http://{ip}/{callcmd}"
+
+    LOGGER.debug(f"SSCPOE_web_request({ip}, {callcmd}, {calldata})...")
+
+    global SSCPOE_session
+    try:
+        if SSCPOE_session is None:
+            SSCPOE_session = requests.Session()
+        response = SSCPOE_session.post(
+            url,
+            headers=headers,
+            json=data,
+            verify=False,
+            timeout=(10, 10),
+        )
+    except requests.exceptions.ConnectionError as e:
+        LOGGER.error(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ConnectionError {str(e)}"
+        )
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None, 0
+    except requests.exceptions.ReadTimeout as e:
+        LOGGER.error(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ReadTimeout {str(e)}"
+        )
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None, 0
+    except Exception as e:
+        LOGGER.error(f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): exception {e}")
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None, 0
+
+    if response.status_code != requests.codes.ok:
+        LOGGER.warning(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response HTTP code: {response.status_code}"
+        )
+        return None, 0
+
+    try:
+        LOGGER.debug(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}"
+        )
+        j = json.loads(response.text)
+
+        if callcmd == 123:
+            return SSCPOE_session.cookies.get_dict(), j.get("errcode", 0)
+
+        err = j.get("errcode", 0)
+        return j["data"], err
+
+    except Exception as e:
+        LOGGER.error(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}, error: {str(e)}"
+        )
+        return None, 0
+
+
+def SSCPOE_web_get(ip: str, path: str, uid: dict, x: bool = False):
+    headers = {
+        "Accept": "text/html, */*; q=0.01",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Connection": "keep-alive",
+        "User-Agent": _USER_AGENT,
+        "Host": ip,
+        "Origin": f"http://{ip}",
+        "Referer": f"http://{ip}/",
+    }
+
+    if ".css" in path:
+        headers["Accept"] = "text/css,*/*;q=0.1"
+    elif "en.js" in path:
+        headers["Accept"] = (
+            "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01"
+        )
+    elif ".js" in path:
+        headers["Accept"] = "*/*"
+
+    if x:
+        headers["X-Requested-With"] = "XMLHttpRequest"
+
+    url = f"http://{ip}/{path}"
+
+    LOGGER.debug(f"SSCPOE_web_get({ip}, {path}) ...")
+
+    global SSCPOE_session
+    try:
+        if SSCPOE_session is None:
+            SSCPOE_session = requests.Session()
+        response = SSCPOE_session.get(
+            url,
+            headers=headers,
+            verify=False,
+            timeout=(10, 10),
+        )
+    except requests.exceptions.ConnectionError as e:
+        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ConnectionError {str(e)}")
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None
+    except requests.exceptions.ReadTimeout as e:
+        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ReadTimeout {str(e)}")
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None
+    except Exception as e:
+        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): exception {e}")
+        SSCPOE_session.close()
+        SSCPOE_session = None
+        return None
+
+    if response.status_code != requests.codes.ok:
+        LOGGER.warning(
+            f"SSCPOE_web_get({ip}, {path}): response HTTP code: {response.status_code}"
+        )
+        return None
+
+    return response.text
+
+
+def SSCPOE_web_login2(ip: str, uid: dict, password: str):
+    #    LOGGER.debug(f"SSCPOE_web_login2({ip})...")
+    #    if SSCPOE_web_get(ip, "", uid) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (1) failed")
+    #        return None
+    #    if SSCPOE_web_get(ip, "css/style.css", uid) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (2) failed")
+    #        return None
+    #    if SSCPOE_web_get(ip, "js/jquery_3.6.0.min.js", uid) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (3) failed")
+    #        return None
+    #    if SSCPOE_web_get(ip, "js/utils.js", uid) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (4) failed")
+    #        return None
+    #    if SSCPOE_web_get(ip, f"langs/en.js?_={int(time.time()*1000)}", uid, True) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (5) failed")
+    #        return None
+    #    if SSCPOE_web_get(ip, "login.html", uid, True) is None:
+    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (6) failed")
+    #        return None
+    return SSCPOE_web_request(ip, uid, 123, {"password": password})
+
+
+def SSCPOE_web_login(ip: str, password: str):
+    uid, errcode = SSCPOE_web_login2(ip, None, password)
+    if uid is None:
+        return "unknown"
+    if errcode == -1:
+        return "cannot_connect"
+    elif errcode == 1001:
+        return "invalid_arg"
+    elif errcode == 20003:
+        return "wrong_email"
+    elif errcode == 20004:
+        return "wrong_password"
+    elif errcode != 0:
+        return f"invalid auth code {errcode}"
     return None

@@ -6,6 +6,8 @@
         },
         "error": {
             "invalid_email": "Invalid e-mail",
+            "invalid_ip": "Invalid IP address",
+            "invalid_web_password": "Password must be 6..12 chars",
             "invalid_cloud_password": "Password must be 6..12 chars",
             "invalid_local_password": "Password must be 6 digits",
             "wrong_email": "E-mail not registered",

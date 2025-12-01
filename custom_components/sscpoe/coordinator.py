@@ -18,15 +18,24 @@ from .protocol import (
     SSCPOE_cloud_request,
     SSCPOE_local_request,
     SSCPOE_local_login,
+    SSCPOE_web_request,
+    SSCPOE_web_login2,
 )
 
 
 class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     LOCAL_PID = "local"
+    WEB_PID = "web"
 
-    def __init__(self, hass: HomeAssistant, sn: str, email: str, password: str):
+    def is_cloud(pid):
+        return pid != SSCPOE_Coordinator.LOCAL_PID and pid != SSCPOE_Coordinator.WEB_PID
+
+    def __init__(
+        self, hass: HomeAssistant, sn: str, ip: str, email: str, password: str
+    ):
         self._sn = sn
+        self._ip = ip
         self._email = email
         self._password = password
         self._key = SSCPOE_CLOUD_KEY
@@ -122,6 +131,49 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                         (CONNECTION_NETWORK_MAC, detail["mac"])
                     },  # ,(CONF_IP_ADDRESS, self._device.detail['ip'])
                 )
+
+        elif self._ip:
+            if self._uid is None:
+                self._uid, err = SSCPOE_web_login2(self._ip, None, self._password)
+                if self._uid is None or err != 0:
+                    raise ApiAuthError(f"ip={self._ip}, errcode={err}")
+            j, err = SSCPOE_web_request(self._ip, self._uid, 101)
+            if j is None or err != 0:
+                raise ApiError(f"SSCPOE_web_request({self._ip}, 101) errcode={err}")
+            detail = j["calldata"]
+            _sn = detail["sn"]
+            if self.prj is None:
+                self.prj = {}
+                self.prj[self.WEB_PID] = {"pid": self.WEB_PID, "name": "WEB"}
+            if self.devices is None:
+                self.devices = {}
+                self.devices[_sn] = {"pid": self.WEB_PID, "sn": _sn}
+            device = self.devices[_sn]
+            detail["name"] = _sn
+            device["detail"] = detail
+            if not ("device_info" in device):
+                model = _sn[0:6]
+                if (
+                    model[0].isalpha()
+                    and model[1].isalpha()
+                    and model[2].isdigit()
+                    and model[3].isdigit()
+                    and model[4].isdigit()
+                    and model[5].isdigit()
+                ):
+                    # Model may be AAADDD###, AADDDA### or AADDD### (GS105)
+                    model = model[:-1]
+                device["device_info"] = DeviceInfo(
+                    identifiers={(DOMAIN, _sn)},
+                    manufacturer="STEAMEMO",
+                    model=model,
+                    name=detail["name"],
+                    sw_version=detail["V"],
+                    connections={
+                        (CONNECTION_NETWORK_MAC, detail["mac"])
+                    },  # ,(CONF_IP_ADDRESS, self._device.detail['ip'])
+                )
+
         elif self._email:
             if self._uid is None:
                 eml = {
@@ -186,7 +238,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self, pid: str, sn: str, index: int, poec: bool
     ) -> None:
         try:
-            async with async_timeout.timeout(2 if pid == self.LOCAL_PID else 10):
+            async with async_timeout.timeout(10 if self.is_cloud(pid) else 2):
                 return await self.hass.async_add_executor_job(
                     self._switch_poe, pid, sn, index, poec
                 )
@@ -198,7 +250,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self, pid: str, sn: str, index: int, extend: bool
     ) -> None:
         try:
-            async with async_timeout.timeout(2 if pid == self.LOCAL_PID else 10):
+            async with async_timeout.timeout(10 if self.is_cloud(pid) else 2):
                 return await self.hass.async_add_executor_job(
                     self._switch_extend, pid, sn, index, extend
                 )
@@ -232,9 +284,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     def _switch(self, pid: str, sn: str, index: int, opcode: int) -> int:
         return (
-            self._switch_local(sn, index, opcode)
-            if pid == self.LOCAL_PID
-            else self._switch_cloud(pid, sn, index, opcode)
+            self._switch_cloud(pid, sn, index, opcode)
+            if self.is_cloud(pid)
+            else self._switch_local(sn, index, opcode)
         )
 
     def _switch_local(self, sn: str, index: int, opcode: int) -> int:

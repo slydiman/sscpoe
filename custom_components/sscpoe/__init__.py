@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_ID, CONF_EMAIL, CONF_PASSWORD, Platform
+from homeassistant.const import (
+    CONF_ID,
+    CONF_IP_ADDRESS,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    Platform,
+)
 from .const import DOMAIN
 from .coordinator import SSCPOE_Coordinator
 
@@ -13,6 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SSCPOE_Coordinator(
         hass,
         entry.data.get(CONF_ID, None),
+        entry.data.get(CONF_IP_ADDRESS, None),
         entry.data.get(CONF_EMAIL, None),
         entry.data[CONF_PASSWORD],
     )
