@@ -18,7 +18,7 @@
         },
         "step": {
             "user": {
-                "title": "Select SSCPOE cloud or local"
+                "title": "Select SSCPOE cloud, web or local (old API)"
             },
             "local": {
                 "title": "Fill in your SSCPOE credentials",

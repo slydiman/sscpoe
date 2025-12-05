@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
-from homeassistant.const import CONF_ID, CONF_IP_ADDRESS, CONF_EMAIL, CONF_PASSWORD
+from homeassistant.const import (
+    CONF_ID,
+    CONF_IP_ADDRESS,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_TOKEN,
+)
 from .const import DOMAIN, LOGGER
 from .protocol import (
     SSCPOE_local_search,
@@ -26,12 +32,24 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, str] = None) -> FlowResult:
         if user_input:
-            if user_input["action"] == "cloud":
+            action = user_input["action"]
+            if action == "cloud":
                 return await self.async_step_cloud()
-            elif user_input["action"] == "web":
+            elif action == "web":
                 return await self.async_step_web()
+            elif action.startswith("web_"):
+                ip = action[4:]
+                return self.async_show_form(
+                    step_id="web",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(CONF_IP_ADDRESS, default=ip): str,
+                            vol.Required(CONF_PASSWORD, default="123456"): str,
+                        }
+                    ),
+                )
             else:
-                sn = user_input["action"]
+                sn = action
                 return self.async_show_form(
                     step_id="local",
                     data_schema=vol.Schema(
@@ -43,11 +61,17 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         self.local_devices = await self.hass.async_add_executor_job(SSCPOE_local_search)
-        actions = {"web": "Add SSCPOE web account", "cloud": "Add SSCPOE cloud account"}
+        actions = {
+            "cloud": "Add SSCPOE cloud account",
+            "web": "Add SSCPOE WEB device manually",
+        }
         for device in self.local_devices:
+            actions["web_" + device["ip"]] = (
+                f"Add WEB {device['model']}, S/N: {device['sn']} ({device['ip']})"
+            )
             activate = " Not activated!" if device["Active_state"] != "active" else ""
             actions[device["sn"]] = (
-                f"Add {device['model']}, S/N: {device['sn']} ({device['ip']}){activate}"
+                f"Add old API {device['model']}, S/N: {device['sn']} ({device['ip']}){activate}"
             )
 
         return self.async_show_form(
@@ -146,10 +170,11 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 def login():
                     return SSCPOE_web_login(ip, password)
 
-                err = await self.hass.async_add_executor_job(login)
+                err, token = await self.hass.async_add_executor_job(login)
                 if err:
                     errors["base"] = err
                 else:
+                    user_input[CONF_TOKEN] = token
                     return self.async_create_entry(title=ip, data=user_input)
 
         # If there is no user input or there were errors,
@@ -179,13 +204,16 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Confirm re-authentication"""
         errors: dict[str, str] = {}
-        sn = self.entry.data.get(CONF_ID)
-        ip = self.entry.data.get(CONF_IP_ADDRESS)
+        sn = self.entry.data.get(CONF_ID, None)
+        ip = self.entry.data.get(CONF_IP_ADDRESS, None)
+        email = self.entry.data.get(CONF_EMAIL, None)
+        password = self.entry.data.get(CONF_PASSWORD, None)
+        token = self.entry.data.get(CONF_TOKEN, None)
         if user_input:
             sn = user_input.get(CONF_ID, sn)
             ip = user_input.get(CONF_IP_ADDRESS, ip)
-            email = user_input.get(CONF_EMAIL, None)
-            password = user_input[CONF_PASSWORD]
+            email = user_input.get(CONF_EMAIL, email)
+            password = user_input.get(CONF_PASSWORD, password)
             if sn:
                 if bad_password(password):
                     errors[CONF_PASSWORD] = "invalid_local_password"
@@ -217,10 +245,9 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
 
                     def login():
-                        res = SSCPOE_web_login(ip, password)
-                        return res
+                        return SSCPOE_web_login(ip, password, token)
 
-                    err = await self.hass.async_add_executor_job(login)
+                    err, token = await self.hass.async_add_executor_job(login)
                     if err:
                         errors["base"] = err
                     else:
@@ -228,6 +255,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                         new_data = {**self.entry.data}
                         new_data[CONF_IP_ADDRESS] = ip
                         new_data[CONF_PASSWORD] = password
+                        new_data[CONF_TOKEN] = token
                         self.hass.config_entries.async_update_entry(
                             self.entry,
                             data=new_data,
@@ -263,29 +291,21 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema = vol.Schema(
                 {
                     vol.Required(CONF_ID, default=sn): str,
-                    vol.Required(
-                        CONF_PASSWORD, default=password if user_input else None
-                    ): str,
+                    vol.Required(CONF_PASSWORD, default=password): str,
                 }
             )
         elif ip:
             data_schema = vol.Schema(
                 {
                     vol.Required(CONF_IP_ADDRESS, default=ip): str,
-                    vol.Required(
-                        CONF_PASSWORD, default=password if user_input else None
-                    ): str,
+                    vol.Required(CONF_PASSWORD, default=password): str,
                 }
             )
         else:
             data_schema = vol.Schema(
                 {
-                    vol.Required(
-                        CONF_EMAIL, default=email if user_input else None
-                    ): str,
-                    vol.Required(
-                        CONF_PASSWORD, default=password if user_input else None
-                    ): str,
+                    vol.Required(CONF_EMAIL, default=email): str,
+                    vol.Required(CONF_PASSWORD, default=password): str,
                 }
             )
 

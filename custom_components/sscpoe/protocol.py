@@ -534,7 +534,7 @@ def SSCPOE_local_login(sn: str, password: str, cmd="login"):
     return None
 
 
-def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
+def SSCPOE_web_request(ip: str, uid: str, callcmd: int, calldata=None):
     headers = {
         "X-Requested-With": "XMLHttpRequest",
         "Connection": "keep-alive",
@@ -549,12 +549,13 @@ def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
     }
 
     if uid:
-        cookie = ""
-        for i, key in enumerate(uid):
-            if cookie:
-                cookie += "; "
-            cookie += f"{key}="
-        headers["Cookie"] = cookie
+        headers["Cookie"] = f"{uid}="
+    #        cookie = ""
+    #        for i, key in enumerate(uid):
+    #            if cookie:
+    #                cookie += "; "
+    #            cookie += f"{key}="
+    #        headers["Cookie"] = cookie
 
     data = {"callcmd": callcmd}
     if calldata:
@@ -564,7 +565,7 @@ def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
 
     url = f"http://{ip}/{callcmd}"
 
-    LOGGER.debug(f"SSCPOE_web_request({ip}, {callcmd}, {calldata})...")
+    LOGGER.debug(f"SSCPOE_web_request({ip}, {uid}, {callcmd}, {calldata})...")
 
     global SSCPOE_session
     try:
@@ -604,16 +605,22 @@ def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
         return None, 0
 
     try:
-        LOGGER.debug(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}"
-        )
         j = json.loads(response.text)
-
-        if callcmd == 123:
-            return SSCPOE_session.cookies.get_dict(), j.get("errcode", 0)
-
         err = j.get("errcode", 0)
-        return j["data"], err
+
+        if callcmd == 123:  # Login
+            cookies = SSCPOE_session.cookies.get_dict()
+            uid = list(cookies.keys())[-1] if cookies else None
+            LOGGER.debug(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, uid: {uid}"
+            )
+            return uid, err
+
+        data = j["data"]
+        LOGGER.debug(
+            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, data: {data}"
+        )
+        return data, err
 
     except Exception as e:
         LOGGER.error(
@@ -622,7 +629,7 @@ def SSCPOE_web_request(ip: str, uid: dict, callcmd: int, calldata=None):
         return None, 0
 
 
-def SSCPOE_web_get(ip: str, path: str, uid: dict, x: bool = False):
+def SSCPOE_web_get(ip: str, path: str, x: bool = False):
     headers = {
         "Accept": "text/html, */*; q=0.01",
         "Accept-Encoding": "gzip, deflate",
@@ -685,7 +692,7 @@ def SSCPOE_web_get(ip: str, path: str, uid: dict, x: bool = False):
     return response.text
 
 
-def SSCPOE_web_login2(ip: str, uid: dict, password: str):
+def SSCPOE_web_login2(ip: str, password: str, uid: str):
     #    LOGGER.debug(f"SSCPOE_web_login2({ip})...")
     #    if SSCPOE_web_get(ip, "", uid) is None:
     #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (1) failed")
@@ -708,18 +715,19 @@ def SSCPOE_web_login2(ip: str, uid: dict, password: str):
     return SSCPOE_web_request(ip, uid, 123, {"password": password})
 
 
-def SSCPOE_web_login(ip: str, password: str):
-    uid, errcode = SSCPOE_web_login2(ip, None, password)
-    if uid is None:
-        return "unknown"
+def SSCPOE_web_login(ip: str, password: str, uid: str = None):
+    uid, errcode = SSCPOE_web_login2(ip, password, uid)
+    if uid and errcode == 0:
+        return None, uid
+
     if errcode == -1:
-        return "cannot_connect"
+        return "cannot_connect", None
     elif errcode == 1001:
-        return "invalid_arg"
+        return "invalid_arg", None
     elif errcode == 20003:
-        return "wrong_email"
+        return "wrong_email", None
     elif errcode == 20004:
-        return "wrong_password"
+        return "wrong_password", None
     elif errcode != 0:
-        return f"invalid auth code {errcode}"
-    return None
+        return f"invalid auth code {errcode}", None
+    return "unknown", None

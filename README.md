@@ -18,11 +18,16 @@ Unofficial SSCPOE/STEAMEMO/Amitres IOT integration for Home Assistant to control
 
 Tested with GPS204, PS308G, GPS316, GS105.
 
-Note the devices with the firmware version v6.0.231024 have no a web UI and the firmware cannot be updated.
-The newer devices with the firmware version v6.0.24xxxx have the web UI and the firmware can be updated (if the manufacturer will publish the firmware).
+Note the devices with the firmware version v6.0.231024 have no a WEB UI and the firmware cannot be updated.
+The newer devices with the firmware version v6.0.24xxxx have the WEB UI and the firmware can be updated (if the manufacturer will publish the firmware).
 All devices v6.0.xxxxxx work locally and via a cloud.
 
 Note GS105 is the managed switch with 1 POE input. It has no POE outputs. You can only monitor the linkage.
+
+Supported:
+- Cloud account (required e-mail and the cloud password)
+- Local UDP multicast protocol (old API, auto search for devices, default activation code is `123456`)
+- Local WEB protocol (new API, required device's IP and the activation code)
 
 # Installation
 
@@ -52,7 +57,8 @@ Note GS105 is the managed switch with 1 POE input. It has no POE outputs. You ca
 
 This integration supports the cloud and local management.
 For the cloud management you need the SSCPOE account `email` and `password`. Use official SSCPOE app (Amitres IOT) from [Google Play](https://play.google.com/store/apps/details?id=com.sscee.app.sscpoe), [App Store](https://apps.apple.com/us/app/sscpoe/id1555401398) or [Windows desktop config app](http://www.sscee.com/en/en/col.jsp?id=105) to register account and devices.
-For the local management you need the activation code (default `123456`). This integration will scan the local network for available devices automatically. The activation code may be changed in the official SSCPOE app.
+For the local management (old UDP multicast protocol) you need the activation code (default `123456`). This integration will scan the local network for available devices automatically. The activation code may be changed in the official SSCPOE app.
+For the local management using WEB protocol you need to know the IP address and the activation code.
 
 [![Open your Home Assistant instance and show an integration.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=sscpoe)
 
@@ -61,3 +67,7 @@ For the local management you need the activation code (default `123456`). This i
 This integration exposes power sensors and POE control switches. You can also activate linkage sensors.
 
 Note: The cloud server does not support multiple connections to the same account from Home Assistant and the SSCPOE app. If you are using the cloud management, the device in Home Assistant will disappear after connecting from the official SSCPOE app and will be reconnected within 30 seconds automatically. You can share the project in the official SSCPOE app to other account and use this account for this integration. The device settings in the SSCPOE app are available only for the admin account.
+
+Note most devices with WEB UI do not support multiple logins. You must shutdown Home Assistant or delete the device entry in this integration and wait for some time or reboot the POE switch to login to WEB UI in a browser.
+
+Note you can use WEB protocol in this intagration and the cloud management via iPhone/Android app simultaneously.
