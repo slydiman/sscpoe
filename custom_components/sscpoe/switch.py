@@ -22,7 +22,7 @@ async def async_setup_entry(
             device = coordinator.devices[sn]
             if "poec" in device["detail"]:
                 ports = len(device["detail"]["poec"])
-                reverse = coordinator.reverse_order(sn)
+                reverse = SSCPOE_Coordinator.reverse_order(sn)
                 for i in range(ports):
                     new_devices.append(
                         POEPortSwitch(

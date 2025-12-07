@@ -52,7 +52,7 @@ async def async_setup_entry(
             elif "poec" in detail:
                 ports = len(detail["poec"])
 
-            reverse = coordinator.reverse_order(sn)
+            reverse = SSCPOE_Coordinator.reverse_order(sn)
             if "pw" in detail:
                 for i in range(ports):
                     new_devices.append(

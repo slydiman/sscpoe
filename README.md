@@ -16,7 +16,7 @@ Unofficial SSCPOE/STEAMEMO/Amitres IOT integration for Home Assistant to control
 
 <img src="https://github.com/slydiman/sscpoe/blob/main/devices.png?raw=true" width="300" alt="Devices"/>
 
-Tested with GPS204, PS308G, GPS316, GS105.
+Tested with GPS204, PS208G, PS308G, GPS316, GS105.
 
 Note the devices with the firmware version v6.0.231024 have no a WEB UI and the firmware cannot be updated.
 The newer devices with the firmware version v6.0.24xxxx have the WEB UI and the firmware can be updated (if the manufacturer will publish the firmware).
