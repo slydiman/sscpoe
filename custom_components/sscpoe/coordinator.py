@@ -61,11 +61,12 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     def reverse_order(sn: str) -> bool:
         # Correct port order: PS208G, PS308G, GPS316.
-        # Reverse port order: GPS204, GPS208, GPS424V3, GPS1xx, GS105.
+        # Reverse port order: GPS204, GPS208, GFS226V1, GPS424V3, GPS1xx, GS105.
         return (
             sn.startswith("GS1")
             or sn.startswith("GPS1")
             or sn.startswith("GPS2")
+            or sn.startswith("GFS2")
             or sn.startswith("GPS4")
         )
 
