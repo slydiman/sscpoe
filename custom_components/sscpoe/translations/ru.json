@@ -60,7 +60,6 @@
         "title": "Локальный поиск (Multicast)",
         "data": {
           "bind_interface": "Сетевой интерфейс",
-          "set_ttl": "Переопределить TTL multicast",
           "mcast_ttl": "TTL multicast"
         }
       },

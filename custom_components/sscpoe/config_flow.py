@@ -30,7 +30,7 @@ METHOD_LOCAL_WEB = "local_web"
 METHOD_LOCAL_MULTICAST = "local_multicast"
 
 CONF_BIND_INTERFACE = "bind_interface"
-CONF_SET_TTL = "set_ttl"
+#CONF_SET_TTL = "set_ttl"
 CONF_MCAST_TTL = "mcast_ttl"
 DEFAULT_BIND_INTERFACE = "default"
 
@@ -209,9 +209,9 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     
         if user_input:
             bind_iface = str(user_input.get(CONF_BIND_INTERFACE, DEFAULT_BIND_INTERFACE))
-            set_ttl = bool(user_input.get(CONF_SET_TTL, False))
-            ttl = int(user_input.get(CONF_MCAST_TTL, ttl_default)) if set_ttl else None
-    
+            #set_ttl = bool(user_input.get(CONF_SET_TTL, False))
+            ttl = int(user_input.get(CONF_MCAST_TTL, ttl_default))
+
             bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface
     
             try:
@@ -229,19 +229,15 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     return await self.async_step_local_select()
     
             bind_default = bind_iface
-            set_ttl_default = set_ttl
-            if ttl is not None:
-                ttl_default = ttl
+            ttl_default = ttl
     
         schema_dict: dict = {
             vol.Required(CONF_BIND_INTERFACE, default=bind_default): vol.In(iface_choices),
-            vol.Required(CONF_SET_TTL, default=set_ttl_default): bool,
-        }
-        if set_ttl_default:
-            schema_dict[vol.Required(CONF_MCAST_TTL, default=ttl_default)] = vol.All(
+            vol.Optional(CONF_MCAST_TTL, default=ttl_default): vol.All(
                 vol.Coerce(int), vol.Range(min=1, max=255)
-            )
-    
+            ),
+        }   
+   
         return self.async_show_form(
             step_id="local_multicast",
             data_schema=vol.Schema(schema_dict),

@@ -60,8 +60,7 @@
         "title": "Local discovery (Multicast)",
         "data": {
           "bind_interface": "Network interface",
-          "set_ttl": "Override multicast TTL",
-          "mcast_ttl": "Multicast TTL"
+          "mcast_ttl": "Multicast TTL value to override the default"
         }
       },
       "local_select": {
