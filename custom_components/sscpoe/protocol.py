@@ -429,6 +429,9 @@ def SSCPOE_local_syn():
 
 host_ip = None
 
+# fallback defaults (set to None / "default" for normal behaviour)
+bind_interface_default = None   # e.g. "enp0s6"
+mcast_ttl_default = None        # set None to keep current hardcoded default in code, or an int 1..255
 
 def get_host_ip():
     global host_ip
@@ -440,22 +443,92 @@ def get_host_ip():
         LOGGER.debug(f"SSCPOE get_host_ip: {host_ip}")
     return host_ip
 
+def _get_ipv4_for_interface(ifname: str) -> str | None:
+    """Return IPv4 address for interface name (Linux best-effort)."""
+    if platform.system() != "Linux":
+        return None
+    try:
+        import fcntl  # Linux only
+    except Exception:
+        return None
 
-def SSCPOE_local_send(dt):
+    SIOCGIFADDR = 0x8915
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        ifreq = struct.pack("256s", ifname[:15].encode("utf-8"))
+        res = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifreq)
+        ip = socket.inet_ntoa(res[20:24])
+        if ip and ip != "0.0.0.0":
+            return ip
+        return None
+    except OSError as e:
+        LOGGER.debug(f"_get_ipv4_for_interface({ifname}) failed: {e}")
+        return None
+    finally:
+        s.close()
+
+
+def _try_bindtodevice(sock: socket.socket, ifname: str) -> bool:
+    """Try SO_BINDTODEVICE; may require privileges. Best-effort."""
+    if platform.system() != "Linux":
+        return False
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, ifname.encode("utf-8"))
+        return True
+    except PermissionError:
+        LOGGER.warning(
+            f"SO_BINDTODEVICE({ifname}) not permitted; continue with IP_MULTICAST_IF only"
+        )
+        return False
+    except OSError as e:
+        LOGGER.debug(f"SO_BINDTODEVICE({ifname}) failed: {e}")
+        return False
+
+
+def SSCPOE_local_send(dt, bind_interface: str | None = None, ttl: int | None = None):
+    # Use module-level defaults if caller didn't provide explicit values
+    if bind_interface is None:
+        bind_interface = bind_interface_default
+    if ttl is None:
+        ttl = mcast_ttl_default
     MCAST_GRP = "239.0.0.100"
     MCAST_PORT = 10086
 
-    host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
+    # Select source IPv4:
+    # - bind_interface None/"default": old behaviour (default-route derived host IP)
+    # - bind_interface "<ifname>": use that interface IPv4 to force multicast egress
+    if bind_interface and bind_interface != "default":
+        host = _get_ipv4_for_interface(bind_interface)
+        if not host:
+            raise RuntimeError(
+                f"Interface '{bind_interface}' has no IPv4 address (or not accessible)"
+            )
+    else:
+        host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     except AttributeError:
         pass
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+
+    # TTL: keep existing default unless explicitly requested
+    if ttl is not None:
+        if int(ttl) < 1 or int(ttl) > 255:
+            raise ValueError(f"Invalid TTL={ttl}, expected 1..255")
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, int(ttl))
+    else:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
     sock.bind((host if platform.system() == "Windows" else MCAST_GRP, 0))
     local_port = sock.getsockname()[1]
+
+    # Best-effort: strict bind to device (may be blocked in containers/HAOS)
+    if bind_interface and bind_interface != "default":
+        _try_bindtodevice(sock, bind_interface)
+
+    # Force multicast egress interface by IPv4 address
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
     sock.setsockopt(
         socket.IPPROTO_IP,
@@ -496,8 +569,8 @@ def SSCPOE_local_recv(sock, syn):
         return None, 0
 
 
-def SSCPOE_local_search():
-    sock, syn = SSCPOE_local_send({"callcmd": "search"})
+def SSCPOE_local_search(bind_interface: str | None = None, ttl: int | None = None):
+    sock, syn = SSCPOE_local_send({"callcmd": "search"}, bind_interface=bind_interface, ttl=ttl)
     start = time.time()
     devices = []
     while time.time() < start + 3:
@@ -508,8 +581,8 @@ def SSCPOE_local_search():
     return devices
 
 
-def SSCPOE_local_request(dt):
-    sock, syn = SSCPOE_local_send(dt)
+def SSCPOE_local_request(dt, bind_interface: str | None = None, ttl: int | None = None):
+    sock, syn = SSCPOE_local_send(dt, bind_interface=bind_interface, ttl=ttl)
     d, err = SSCPOE_local_recv(sock, syn)
     sock.close()
     return d, err
@@ -731,3 +804,4 @@ def SSCPOE_web_login(ip: str, password: str, uid: str = None):
     elif errcode != 0:
         return f"invalid auth code {errcode}", None
     return "unknown", None
+    
