@@ -1,46 +1,84 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "SSCPOE account is already configured",
-            "reauth_successful": "Reauthentication was successful"
-        },
-        "error": {
-            "invalid_email": "Invalid e-mail",
-            "invalid_ip": "Invalid IP address",
-            "invalid_web_password": "Password must be 6..12 chars",
-            "invalid_cloud_password": "Password must be 6..12 chars",
-            "invalid_local_password": "Password must be 6 digits",
-            "wrong_email": "E-mail not registered",
-            "wrong_password": "Incorrect password",
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "unknown"
-        },
-        "step": {
-            "user": {
-                "title": "Select SSCPOE cloud, web or local (old API)"
-            },
-            "local": {
-                "title": "Fill in your SSCPOE credentials",
-                "data": {
-                    "id": "S/N",
-                    "password": "Password"
-                }
-            },
-            "cloud": {
-                "title": "Fill in your SSCPOE credentials",
-                "data": {
-                    "email": "E-mail",
-                    "password": "Password"
-                }
-            },
-            "reauth_confirm": {
-                "title": "Reauthenticate with your SSCPOE credentials",
-                "data": {
-                    "email": "E-mail",
-                    "password": "Password"
-                }
-            }
+  "config": {
+    "abort": {
+      "already_configured": "SSCPOE account is already configured",
+      "reauth_successful": "Reauthentication was successful",
+      "missing_entry": "Missing entry for re-authentication",
+      "unknown_action": "Unknown action"
+    },
+    "error": {
+      "invalid_email": "Invalid e-mail",
+      "invalid_ip": "Invalid IP address",
+      "invalid_web_password": "Password must be 6..12 chars",
+      "invalid_cloud_password": "Password must be 6..12 chars",
+      "invalid_local_password": "Password must be 6 digits",
+      "wrong_email": "E-mail not registered",
+      "wrong_password": "Incorrect password",
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "unknown",
+      "device_not_found": "Device not found in discovery results",
+      "multicast_discovery_failed": "Multicast discovery failed",
+      "multicast_discovery_timeout": "No devices found (timeout)"
+    },
+    "step": {
+      "user": {
+        "title": "Select SSCPOE cloud, web or local (old API)",
+        "data": {
+          "method": "Method"
         }
+      },
+      "local": {
+        "title": "Fill in your SSCPOE credentials",
+        "data": {
+          "id": "S/N",
+          "password": "Password"
+        }
+      },
+      "cloud": {
+        "title": "Fill in your SSCPOE credentials",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
+      },
+      "local_web": {
+        "title": "Local device (WEB)",
+        "data": {
+          "ip_address": "IP address",
+          "password": "Password"
+        }
+      },
+      "web": {
+        "title": "Local device (WEB)",
+        "data": {
+          "ip_address": "IP address",
+          "password": "Password"
+        }
+      },
+      "local_multicast": {
+        "title": "Local discovery (Multicast)",
+        "data": {
+          "bind_interface": "Network interface",
+          "set_ttl": "Override multicast TTL",
+          "mcast_ttl": "Multicast TTL"
+        }
+      },
+      "local_select": {
+        "title": "Select device",
+        "data": {
+          "action": "Device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate with your SSCPOE credentials",
+        "data": {
+          "email": "E-mail",
+          "password": "Password",
+          "id": "S/N",
+          "ip_address": "IP address"
+        }
+      }
     }
+  }
 }

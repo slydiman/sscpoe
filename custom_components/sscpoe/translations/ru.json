@@ -1,0 +1,84 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Аккаунт SSCPOE уже настроен",
+      "reauth_successful": "Повторная авторизация прошла успешно",
+      "missing_entry": "Не найдена запись для повторной авторизации",
+      "unknown_action": "Неизвестное действие"
+    },
+    "error": {
+      "invalid_email": "Некорректный e-mail",
+      "invalid_ip": "Некорректный IP-адрес",
+      "invalid_web_password": "Пароль должен быть длиной 6..12 символов",
+      "invalid_cloud_password": "Пароль должен быть длиной 6..12 символов",
+      "invalid_local_password": "Пароль должен быть длиной 6..12 символов",
+      "wrong_email": "E-mail не зарегистрирован",
+      "wrong_password": "Неверный пароль",
+      "cannot_connect": "Не удалось подключиться",
+      "invalid_auth": "Ошибка авторизации",
+      "unknown": "Неизвестная ошибка",
+      "device_not_found": "Устройство не найдено в результатах поиска",
+      "multicast_discovery_failed": "Ошибка multicast-поиска",
+      "multicast_discovery_timeout": "Устройства не найдены (таймаут)"
+    },
+    "step": {
+      "user": {
+        "title": "Выберите SSCPOE: облако, WEB или локально (старый API)",
+        "data": {
+          "method": "Способ"
+        }
+      },
+      "local": {
+        "title": "Введите данные SSCPOE",
+        "data": {
+          "id": "S/N",
+          "password": "Пароль"
+        }
+      },
+      "cloud": {
+        "title": "Введите данные SSCPOE",
+        "data": {
+          "email": "E-mail",
+          "password": "Пароль"
+        }
+      },
+      "local_web": {
+        "title": "Локальное устройство (WEB)",
+        "data": {
+          "ip_address": "IP-адрес",
+          "password": "Пароль"
+        }
+      },
+      "web": {
+        "title": "Локальное устройство (WEB)",
+        "data": {
+          "ip_address": "IP-адрес",
+          "password": "Пароль"
+        }
+      },
+      "local_multicast": {
+        "title": "Локальный поиск (Multicast)",
+        "data": {
+          "bind_interface": "Сетевой интерфейс",
+          "set_ttl": "Переопределить TTL multicast",
+          "mcast_ttl": "TTL multicast"
+        }
+      },
+      "local_select": {
+        "title": "Выбор устройства",
+        "data": {
+          "action": "Устройство"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Повторная авторизация SSCPOE",
+        "data": {
+          "email": "E-mail",
+          "password": "Пароль",
+          "id": "S/N",
+          "ip_address": "IP-адрес"
+        }
+      }
+    }
+  }
+}
