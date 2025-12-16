@@ -5,6 +5,7 @@ import voluptuous as vol
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import NumberSelector, NumberSelectorConfig, NumberSelectorMode
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.const import (
     CONF_ID,
     CONF_IP_ADDRESS,
@@ -14,6 +15,7 @@ from homeassistant.const import (
 )
 from .const import DOMAIN, LOGGER
 from .protocol import (
+    SSCPOE_LOCAL_DEF_PASSWORD,
     SSCPOE_local_search,
     _get_ipv4_for_interface,
     SSCPOE_local_login,
@@ -170,18 +172,18 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors[CONF_IP_ADDRESS] = "invalid_ip"
             else:
     
-                def login():
-                    return SSCPOE_web_login(ip, password)
-    
-                err, token = await self.hass.async_add_executor_job(login)
-                if err:
-                    errors["base"] = err
+                devices = [{"ip": ip}]
+                await self._check_web_accessibility(devices)
+                device = devices[0]
+                
+                if not device.get("web_token"):
+                    errors["base"] = "web_login_failed"
                 else:
                     # Save pending web data; do NOT create entry yet
                     self._pending_web = {
                         CONF_IP_ADDRESS: ip,
                         CONF_PASSWORD: password,
-                        CONF_TOKEN: token,
+                        CONF_TOKEN: device["web_token"],
                     }
                     # Build single-item list so local_select is unified
                     self.local_devices = [
@@ -204,7 +206,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         """Screen 2M: multicast discovery settings + scan, then go to local confirm screen."""
         errors: dict[str, str] = {}
     
-        # Получаем список интерфейсов с их IP-адресами
+        # Get list of interfaces with their IP addresses
         iface_choices = self._get_interface_choices()
         if not iface_choices:
             errors["base"] = "no_interfaces_with_ip"
@@ -223,7 +225,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             #set_ttl = bool(user_input.get(CONF_SET_TTL, False))
             ttl = int(user_input.get(CONF_MCAST_TTL, ttl_default))
 
-            bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface.split(" (")[0]  # Извлекаем имя интерфейса без IP
+            bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface.split(" (")[0]  # Extract interface name without IP
     
             try:
                 self.local_devices = await self.hass.async_add_executor_job(
@@ -237,6 +239,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = "multicast_discovery_timeout"
                 else:
                     self._pending_web = None
+                    # Check HTTP management accessibility for all discovered devices
+                    await self._check_web_accessibility(self.local_devices)                    
                     return await self.async_step_local_select()
     
             bind_default = bind_iface
@@ -248,7 +252,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 NumberSelectorConfig(
                     min=1,
                     max=255,
-                    mode=NumberSelectorMode.BOX  # Это обеспечит отображение как текстового поля
+                    mode=NumberSelectorMode.BOX  # This ensures display as a text input field
                 )
             ),
         }   
@@ -257,10 +261,35 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="local_multicast",
             data_schema=vol.Schema(schema_dict),
             errors=errors,
-        )
-
+        )    
+    
+    async def _check_web_accessibility(self, devices: list[dict]) -> list[dict]:
+        """Check HTTP management accessibility with default password for devices."""
+        web_accessible_devices = []
+        session = async_get_clientsession(self.hass)
+        
+        for device in devices:
+            ip = device.get("ip")
+            if not ip:
+                continue
+                
+            try:
+                # Use the same method as in async_step_local_web
+                err, token = await self.hass.async_add_executor_job(
+                    SSCPOE_web_login, ip, SSCPOE_LOCAL_DEF_PASSWORD
+                )
+                if not err:
+                    # Add token for further use
+                    device["web_token"] = token
+                else:
+                    LOGGER.debug(f"SSCPOE HTTP access check failed for {ip}: {err}")
+            except Exception as e:
+                LOGGER.debug(f"SSCPOE HTTP access check exception for {ip}: {e}")
+                
+        return web_accessible_devices
+    
     def _get_interface_choices(self) -> list[str]:
-        """Получаем список интерфейсов с их IP-адресами, скрывая интерфейсы без IP."""
+        """Get list of interfaces with their IP addresses, hiding interfaces without IP."""
         try:
             interfaces = []
             for idx, name in socket.if_nameindex():
@@ -315,19 +344,22 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             ip = device.get("ip")
             sn = device.get("sn")
         
-            # fallback key: если sn нет, используем ip (как минимум он у вас участвует в UI)
+            # fallback key: if SN is missing, use IP (at minimum it's used in UI)
             key = sn or ip
             if not key or not ip:
                 continue
-        
-            actions["web_" + ip] = (
-                f"Add WEB {device.get('model','')}, S/N: {sn or '-'} ({ip})"
-            )
+
+            # old_ (multicast) AVAILABLE FOR ALL DISCOVERED DEVICES
             activate = " Not activated!" if device.get("Active_state") != "active" else ""
             actions["old_" + str(key)] = (
                 f"Add old API {device.get('model','')}, S/N: {sn or '-'} ({ip}){activate}"
             )
-
+            
+            # web_ AVAILABLE ONLY FOR DEVICES WITH SUCCESSFUL HTTP CHECK
+            if device.get("web_token"):  # Successful HTTP check
+                actions["web_" + ip] = (
+                    f"Add WEB {device.get('model','')}, S/N: {sn or '-'} ({ip})"
+                )        
     
         return self.async_show_form(
             step_id="local_select",
@@ -493,4 +525,3 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=data_schema,
             errors=errors,
         )
-        
