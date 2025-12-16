@@ -3,6 +3,7 @@ import socket
 from typing import Any, Mapping
 import voluptuous as vol
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.selector import NumberSelector, NumberSelectorConfig, NumberSelectorMode
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
 from homeassistant.const import (
     CONF_ID,
@@ -14,6 +15,7 @@ from homeassistant.const import (
 from .const import DOMAIN, LOGGER
 from .protocol import (
     SSCPOE_local_search,
+    _get_ipv4_for_interface,
     SSCPOE_local_login,
     SSCPOE_cloud_login,
     SSCPOE_web_login,
@@ -202,7 +204,16 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         """Screen 2M: multicast discovery settings + scan, then go to local confirm screen."""
         errors: dict[str, str] = {}
     
-        iface_choices = [DEFAULT_BIND_INTERFACE] + sorted(_list_interfaces())
+        # Получаем список интерфейсов с их IP-адресами
+        iface_choices = self._get_interface_choices()
+        if not iface_choices:
+            errors["base"] = "no_interfaces_with_ip"
+            return self.async_show_form(
+                step_id="local_multicast",
+                data_schema=vol.Schema({}),
+                errors=errors,
+            )        
+        
         bind_default = DEFAULT_BIND_INTERFACE
         set_ttl_default = False
         ttl_default = 2
@@ -212,7 +223,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             #set_ttl = bool(user_input.get(CONF_SET_TTL, False))
             ttl = int(user_input.get(CONF_MCAST_TTL, ttl_default))
 
-            bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface
+            bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface.split(" (")[0]  # Извлекаем имя интерфейса без IP
     
             try:
                 self.local_devices = await self.hass.async_add_executor_job(
@@ -233,8 +244,12 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     
         schema_dict: dict = {
             vol.Required(CONF_BIND_INTERFACE, default=bind_default): vol.In(iface_choices),
-            vol.Optional(CONF_MCAST_TTL, default=ttl_default): vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=255)
+            vol.Required(CONF_MCAST_TTL, default=ttl_default): NumberSelector(
+                NumberSelectorConfig(
+                    min=1,
+                    max=255,
+                    mode=NumberSelectorMode.BOX  # Это обеспечит отображение как текстового поля
+                )
             ),
         }   
    
@@ -243,7 +258,19 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(schema_dict),
             errors=errors,
         )
-    
+
+    def _get_interface_choices(self) -> list[str]:
+        """Получаем список интерфейсов с их IP-адресами, скрывая интерфейсы без IP."""
+        try:
+            interfaces = []
+            for idx, name in socket.if_nameindex():
+                ip = _get_ipv4_for_interface(name)
+                if ip:
+                    interfaces.append(f"{name} ({ip})")
+            return [DEFAULT_BIND_INTERFACE] + sorted(interfaces)
+        except Exception:
+            return [DEFAULT_BIND_INTERFACE]
+
     async def async_step_local_select(self, user_input: dict[str, str] = None) -> FlowResult:
         """Screen 3L: confirm/choose local device to add (web/manual or multicast)."""
         if user_input:

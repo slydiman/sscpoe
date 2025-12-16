@@ -4,6 +4,7 @@
       "already_configured": "Аккаунт SSCPOE уже настроен",
       "reauth_successful": "Повторная авторизация прошла успешно",
       "missing_entry": "Не найдена запись для повторной авторизации",
+      "no_interfaces_with_ip": "Не найдено сетевых интерфейсов с IP-адресом",
       "unknown_action": "Неизвестное действие"
     },
     "error": {

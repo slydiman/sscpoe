@@ -4,6 +4,7 @@
       "already_configured": "SSCPOE account is already configured",
       "reauth_successful": "Reauthentication was successful",
       "missing_entry": "Missing entry for re-authentication",
+      "no_interfaces_with_ip": "No network interfaces with IP address found",
       "unknown_action": "Unknown action"
     },
     "error": {
