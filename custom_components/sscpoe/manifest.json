@@ -1,14 +1,14 @@
 {
   "domain": "sscpoe",
   "name": "SSCPOE",
-  "codeowners": ["@slydiman", "@DEvd"],
+  "codeowners": ["@slydiman"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://gitverse.ru/DEvd/sscpoe-mdi",
+  "documentation": "https://github.com/slydiman/sscpoe",
   "homekit": {},
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://gitverse.ru/DEvd/sscpoe-mdi/issues",
+  "issue_tracker": "https://github.com/slydiman/sscpoe/issues",
   "requirements": ["requests"],
-  "version": "2025.12.14",
+  "version": "2025.12.08",
   "zeroconf": []
 }
