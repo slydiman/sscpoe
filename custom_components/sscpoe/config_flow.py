@@ -21,6 +21,7 @@ from .protocol import (
     SSCPOE_local_login,
     SSCPOE_cloud_login,
     SSCPOE_web_login,
+    SSCPOE_web_request,
 )
 
 
@@ -39,22 +40,38 @@ CONF_MCAST_TTL = "mcast_ttl"
 DEFAULT_BIND_INTERFACE = "default"
 
 
-def _list_interfaces() -> list[str]:
-    """Interface list for dropdown (best-effort)."""
-    try:
-        return [name for _idx, name in socket.if_nameindex()]
-    except Exception:
-        return []
-
-
 class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 4
 
     # CONNECTION_CLASS = CONN_CLASS_CLOUD_POLL
 
     local_devices: list[dict] = None
-    _pending_web: dict | None = None
     entry: ConfigEntry | None = None
+
+    def _extract_model_from_sn(self, sn: str | None) -> str:
+        """Extract model from first 10 chars of SN, strip trailing zeros."""
+        if not sn or len(sn) < 10:
+            return "Unknown"
+        model = sn[:10].rstrip('0')
+        return model if len(model) >= 3 else "Unknown"
+
+    def _normalize_device_data(self, device: dict) -> dict:
+        """Ensure all expected fields are present and consistent across discovery methods."""
+        sn = device.get("sn")
+
+        # Always extract model from SN for consistency, even if 'model' exists
+        device["model"] = self._extract_model_from_sn(sn)
+
+        # Firmware version
+        firmware = device.get("V", "Unknown")
+        if firmware and firmware not in ("Unknown", "0.0.0", "null", ""):
+            device["model"] = f"{device['model']} (FW: {firmware})"
+
+        # Ensure active state
+        if "Active_state" not in device:
+            device["Active_state"] = "active"
+
+        return device
 
     async def async_step_user(self, user_input: dict[str, str] = None) -> FlowResult:
         """Screen 1: choose connection method."""
@@ -179,15 +196,49 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 if not device.get("web_token"):
                     errors["base"] = "web_login_failed"
                 else:
-                    # Save pending web data; do NOT create entry yet
-                    self._pending_web = {
-                        CONF_IP_ADDRESS: ip,
-                        CONF_PASSWORD: password,
-                        CONF_TOKEN: device["web_token"],
-                    }
-                    # Build single-item list so local_select is unified
+                    # Fetch real device data via callcmd=101
+                    try:
+                        device_info, err = await self.hass.async_add_executor_job(
+                            SSCPOE_web_request, ip, device["web_token"], 101
+                        )
+                        if not err and device_info and "calldata" in device_info:
+                            calldata = device_info["calldata"]
+                            sn = calldata.get("sn", f"web_{ip.replace('.', '_')}")
+                            
+                            # Extract model from first 10 characters of SN
+                            if sn and len(sn) >= 10:
+                                model_prefix = sn[:10]
+                                model = model_prefix.rstrip('0')  # Remove trailing zeros
+                                if len(model) >= 3:  # Ensure minimum length
+                                    pass  # model is already valid
+                                else:
+                                    model = "Unknown"
+                            else:
+                                model = "Unknown"
+                                
+                            # Firmware version
+                            firmware = calldata.get("V", "Unknown")
+                        else:
+                            sn = f"web_{ip.replace('.', '_')}"
+                            model = "Unknown"
+                            firmware = "Unknown"
+                    except Exception as e:
+                        LOGGER.debug("Failed to get device info for %s: %s", ip, e)
+                        sn = f"web_{ip.replace('.', '_')}"
+                        model = "Unknown"
+                        firmware = "Unknown"
+
+                    # Build single-item list using unified logic
                     self.local_devices = [
-                        {"ip": ip, "sn": "web_manual", "model": "WEB", "Active_state": "active"}
+                        self._normalize_device_data({
+                            "ip": ip,
+                            "sn": sn,
+                            "V": firmware,
+                            "Active_state": "active",
+                            "web_token": device["web_token"],
+                            "add_method": "web",
+                            "user_password": password
+                        })
                     ]
                     return await self.async_step_local_select()
     
@@ -228,21 +279,57 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             bind_iface_param = None if bind_iface == DEFAULT_BIND_INTERFACE else bind_iface.split(" (")[0]  # Extract interface name without IP
     
             try:
-                self.local_devices = await self.hass.async_add_executor_job(
+                discovered = await self.hass.async_add_executor_job(
                     SSCPOE_local_search, bind_iface_param, ttl
                 )
             except Exception as e:
                 LOGGER.exception("SSCPOE multicast discovery failed: %s", e)
                 errors["base"] = "multicast_discovery_failed"
             else:
-                if not self.local_devices:
+                if not discovered:
                     errors["base"] = "multicast_discovery_timeout"
                 else:
-                    self._pending_web = None
-                    # Check HTTP management accessibility for all discovered devices
-                    await self._check_web_accessibility(self.local_devices)                    
-                    return await self.async_step_local_select()
+                    self.local_devices = []
+                    web_candidates = []
+                    # Process each discovered device with normalization
+                    for dev in discovered:
+                         old_device = self._normalize_device_data({
+                             "add_method": "old",
+                             "sn": dev.get("sn"),
+                             "ip": dev.get("ip"),
+                             "V": dev.get("V"),
+                             "Active_state": dev.get("Active_state", "active"),
+                         })
+                         self.local_devices.append(old_device)
     
+                         # Add to web candidate list if IP is set
+                         if dev.get("ip"):
+                             web_candidates.append({"ip": dev["ip"]})
+
+                     # Check web accessibility for all candidates
+                    if web_candidates:
+                         await self._check_web_accessibility(web_candidates)
+    
+                     # Add web devices to local_devices
+                    for candidate in web_candidates:
+                         if candidate.get("web_token"):
+                             ip = candidate["ip"]
+                             # Find existing device with this IP
+                             src_dev = next((d for d in self.local_devices if d["ip"] == ip and d["add_method"] == "old"), None)
+                             if src_dev:
+                                 web_device = self._normalize_device_data({
+                                     "add_method": "web",
+                                     "ip": ip,
+                                     "sn": src_dev["sn"],
+                                     "V": src_dev["V"],
+                                     "Active_state": "active",
+                                     "web_token": candidate["web_token"],
+                                     "user_password": SSCPOE_LOCAL_DEF_PASSWORD,
+                                 })
+                                 self.local_devices.append(web_device)
+
+                    return await self.async_step_local_select()
+
             bind_default = bind_iface
             ttl_default = ttl
     
@@ -263,10 +350,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )    
     
-    async def _check_web_accessibility(self, devices: list[dict]) -> list[dict]:
+    async def _check_web_accessibility(self, devices: list[dict]) -> None:
         """Check HTTP management accessibility with default password for devices."""
-        web_accessible_devices = []
-        session = async_get_clientsession(self.hass)
         
         for device in devices:
             ip = device.get("ip")
@@ -282,11 +367,11 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     # Add token for further use
                     device["web_token"] = token
                 else:
-                    LOGGER.debug(f"SSCPOE HTTP access check failed for {ip}: {err}")
+                    LOGGER.debug("SSCPOE HTTP access check failed for %s: %s", ip, err)
             except Exception as e:
-                LOGGER.debug(f"SSCPOE HTTP access check exception for {ip}: {e}")
+                LOGGER.debug("SSCPOE HTTP access check exception for %s: %s", ip, e)
                 
-        return web_accessible_devices
+        return None
     
     def _get_interface_choices(self) -> list[str]:
         """Get list of interfaces with their IP addresses, hiding interfaces without IP."""
@@ -307,11 +392,6 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     
             if action.startswith("web_"):
                 ip = action[4:]
-    
-                # If this was Local Web method, we already verified credentials and have token
-                if self._pending_web and self._pending_web.get(CONF_IP_ADDRESS) == ip:
-                    data = dict(self._pending_web)
-                    return self.async_create_entry(title=ip, data=data)
     
                 # Otherwise (multicast), go through normal web step with prefilled IP
                 return self.async_show_form(
@@ -341,25 +421,15 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     
         actions = {}
         for device in (self.local_devices or []):
-            ip = device.get("ip")
-            sn = device.get("sn")
-        
-            # fallback key: if SN is missing, use IP (at minimum it's used in UI)
-            key = sn or ip
-            if not key or not ip:
-                continue
+            if device.get("add_method") == "old":
+                sn = device.get("sn") or device.get("ip", "unknown")
+                activate = " Not activated!" if device.get("Active_state") != "active" else ""
+                actions[f"old_{sn}"] = f"Add old API {device.get('model','Unknown')}, S/N: {sn} ({device['ip']}){activate}"
 
-            # old_ (multicast) AVAILABLE FOR ALL DISCOVERED DEVICES
-            activate = " Not activated!" if device.get("Active_state") != "active" else ""
-            actions["old_" + str(key)] = (
-                f"Add old API {device.get('model','')}, S/N: {sn or '-'} ({ip}){activate}"
-            )
-            
-            # web_ AVAILABLE ONLY FOR DEVICES WITH SUCCESSFUL HTTP CHECK
-            if device.get("web_token"):  # Successful HTTP check
-                actions["web_" + ip] = (
-                    f"Add WEB {device.get('model','')}, S/N: {sn or '-'} ({ip})"
-                )        
+            elif device.get("add_method") == "web":
+                ip = device["ip"]
+                sn = device.get("sn") or f"web_{ip.replace('.', '_')}"
+                actions[f"web_{ip}"] = f"Add WEB {device.get('model','Unknown')}, S/N: {sn} ({ip})"
     
         return self.async_show_form(
             step_id="local_select",
