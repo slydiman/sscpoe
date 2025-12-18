@@ -441,21 +441,99 @@ def get_host_ip():
     return host_ip
 
 
-def SSCPOE_local_send(dt):
+def get_if_ip(ifname: str) -> str | None:
+    """Return IPv4 address for interface name (Linux best-effort)."""
+    if platform.system() != "Linux":
+        return None
+    try:
+        import fcntl  # Linux only
+    except Exception:
+        return None
+
+    SIOCGIFADDR = 0x8915
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        ifreq = struct.pack("256s", ifname[:15].encode("utf-8"))
+        res = fcntl.ioctl(s.fileno(), SIOCGIFADDR, ifreq)
+        ip = socket.inet_ntoa(res[20:24])
+        if ip and ip != "0.0.0.0":
+            return ip
+    except OSError as e:
+        LOGGER.debug(f"get_if_ip({ifname}) failed: {str(e)}")
+    finally:
+        s.close()
+    return None
+
+
+def bind_if(sock: socket.socket, ifname: str) -> bool:
+    """Try SO_BINDTODEVICE; may require privileges. Best-effort."""
+    if platform.system() != "Linux":
+        return False
+    try:
+        sock.setsockopt(
+            socket.SOL_SOCKET, socket.SO_BINDTODEVICE, ifname.encode("utf-8")
+        )
+        return True
+    except PermissionError:
+        LOGGER.warning(
+            f"SO_BINDTODEVICE({ifname}) not permitted; continue with IP_MULTICAST_IF only"
+        )
+        return False
+    except OSError as e:
+        LOGGER.debug(f"SO_BINDTODEVICE({ifname}) failed: {e}")
+        return False
+
+
+SSCPOE_LOCAL_DEF_BIND_INTERFACE = "default"
+SSCPOE_LOCAL_DEF_TTL = 2
+
+
+def SSCPOE_get_interfaces() -> list[str]:
+    """Get list of interfaces with their IP addresses, hiding interfaces without IP."""
+    interfaces = []
+    try:
+        for i, ifname in socket.if_nameindex():
+            ip = get_if_ip(ifname)
+            if ip:
+                interfaces.append(f"{ifname} ({ip})")
+    except Exception:
+        pass
+    return [SSCPOE_LOCAL_DEF_BIND_INTERFACE] + sorted(interfaces)
+
+
+def SSCPOE_local_send(
+    dt, ifname: str = SSCPOE_LOCAL_DEF_BIND_INTERFACE, ttl: int = SSCPOE_LOCAL_DEF_TTL
+):
     MCAST_GRP = "239.0.0.100"
     MCAST_PORT = 10086
 
-    host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
+    if ifname != SSCPOE_LOCAL_DEF_BIND_INTERFACE:
+        host = get_if_ip(ifname)
+        if not host:
+            raise RuntimeError(
+                f"Interface '{ifname}' has no IPv4 address (or not accessible)"
+            )
+    else:
+        host = get_host_ip()  # socket.gethostbyname(socket.gethostname())
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     except AttributeError:
         pass
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+
+    if ttl < 1 or ttl > 255:
+        raise ValueError(f"Invalid TTL={ttl}, expected 1..255")
+
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
     sock.bind((host if platform.system() == "Windows" else MCAST_GRP, 0))
     local_port = sock.getsockname()[1]
+
+    # Best-effort: strict bind to device (may be blocked in containers/HAOS)
+    if ifname != SSCPOE_LOCAL_DEF_BIND_INTERFACE:
+        bind_if(sock, ifname)
+
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
     sock.setsockopt(
         socket.IPPROTO_IP,
@@ -465,7 +543,7 @@ def SSCPOE_local_send(dt):
 
     syn = SSCPOE_local_syn()
     cmd = {"cmd": "calludp", "syn": syn, "data": dt}
-    LOGGER.debug(f"SSCPOE_local_send: {cmd}")
+    LOGGER.debug(f"SSCPOE_local_send({ifname}, {ttl}): {cmd}")
     sock.sendto(
         (encrypt(strToUtf8Bytes(json_to_str(cmd)), SSCPOE_LOCAL_KEY) + "\r\n").encode(),
         (MCAST_GRP, MCAST_PORT),
@@ -496,20 +574,56 @@ def SSCPOE_local_recv(sock, syn):
         return None, 0
 
 
-def SSCPOE_local_search():
-    sock, syn = SSCPOE_local_send({"callcmd": "search"})
+def SSCPOE_model_from_sn(sn: str) -> str:
+    # Model may be
+    # AAADDD###: GPS204, GPS208, GPS316, GPS424
+    # AADDDA###: GP208G, PS308G
+    # AADDD###: GS105
+    # and V1 or V3 suffix, like GPS204V3, GP208GV3 or GS105V1.
+    model = sn[0:8]
+    if not (model.endswith("V1") or model.endswith("V3")):
+        model = model[:-1]
+        if not (model.endswith("V1") or model.endswith("V3")):
+            model = model[:-1]
+            if (
+                model[0].isalpha()
+                and model[1].isalpha()
+                and model[2].isdigit()
+                and model[3].isdigit()
+                and model[4].isdigit()
+                and model[5].isdigit()
+            ):
+                model = model[:-1]
+    return model
+
+
+def SSCPOE_normalize_device(device: dict):
+    sn = device.get("sn")
+    if not device.get("model"):
+        device["model"] = SSCPOE_model_from_sn(sn)
+    if "Active_state" not in device:
+        device["Active_state"] = "active"
+
+
+def SSCPOE_local_search(
+    ifname: str = SSCPOE_LOCAL_DEF_BIND_INTERFACE, ttl: int = SSCPOE_LOCAL_DEF_TTL
+):
+    sock, syn = SSCPOE_local_send({"callcmd": "search"}, ifname, ttl)
     start = time.time()
     devices = []
     while time.time() < start + 3:
         d, err = SSCPOE_local_recv(sock, syn)
         if d:
+            SSCPOE_normalize_device(d)
             devices.append(d)
     sock.close()
     return devices
 
 
-def SSCPOE_local_request(dt):
-    sock, syn = SSCPOE_local_send(dt)
+def SSCPOE_local_request(
+    dt, ifname: str = SSCPOE_LOCAL_DEF_BIND_INTERFACE, ttl: int = SSCPOE_LOCAL_DEF_TTL
+):
+    sock, syn = SSCPOE_local_send(dt, ifname, ttl)
     d, err = SSCPOE_local_recv(sock, syn)
     sock.close()
     return d, err
@@ -518,14 +632,22 @@ def SSCPOE_local_request(dt):
 SSCPOE_LOCAL_DEF_PASSWORD = "123456"
 
 
-def SSCPOE_local_login(sn: str, password: str, cmd="login"):
+def SSCPOE_local_login(
+    sn: str,
+    password: str,
+    cmd="login",
+    ifname: str = SSCPOE_LOCAL_DEF_BIND_INTERFACE,
+    ttl: int = SSCPOE_LOCAL_DEF_TTL,
+):
     j, err = SSCPOE_local_request(
         {
             "callcmd": "Security verification",
             "password": password,
             "sn": sn,
             "command": cmd,
-        }
+        },
+        ifname,
+        ttl,
     )
     if j is None:
         return "unknown"
@@ -690,6 +812,19 @@ def SSCPOE_web_get(ip: str, path: str, x: bool = False):
         return None
 
     return response.text
+
+
+def SSCPOE_web_accessibility(ip: str) -> bool:
+    """Check WEB management accessibility."""
+    try:
+        j, err = SSCPOE_web_request(ip, None, 100)
+        if j is not None:
+            return True
+        else:
+            LOGGER.debug(f"SSCPOE WEB access check failed for {ip}: {err}")
+    except Exception as e:
+        LOGGER.debug(f"SSCPOE WEB access check exception for {ip}: {str(e)}")
+    return False
 
 
 def SSCPOE_web_login2(ip: str, password: str, uid: str):

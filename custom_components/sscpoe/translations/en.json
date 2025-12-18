@@ -1,46 +1,72 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "SSCPOE account is already configured",
-            "reauth_successful": "Reauthentication was successful"
-        },
-        "error": {
-            "invalid_email": "Invalid e-mail",
-            "invalid_ip": "Invalid IP address",
-            "invalid_web_password": "Password must be 6..12 chars",
-            "invalid_cloud_password": "Password must be 6..12 chars",
-            "invalid_local_password": "Password must be 6 digits",
-            "wrong_email": "E-mail not registered",
-            "wrong_password": "Incorrect password",
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "unknown"
-        },
-        "step": {
-            "user": {
-                "title": "Select SSCPOE cloud, web or local (old API)"
-            },
-            "local": {
-                "title": "Fill in your SSCPOE credentials",
-                "data": {
-                    "id": "S/N",
-                    "password": "Password"
-                }
-            },
-            "cloud": {
-                "title": "Fill in your SSCPOE credentials",
-                "data": {
-                    "email": "E-mail",
-                    "password": "Password"
-                }
-            },
-            "reauth_confirm": {
-                "title": "Reauthenticate with your SSCPOE credentials",
-                "data": {
-                    "email": "E-mail",
-                    "password": "Password"
-                }
-            }
+  "config": {
+    "abort": {
+      "already_configured": "SSCPOE account is already configured",
+      "reauth_successful": "Reauthentication was successful"
+    },
+    "error": {
+      "invalid_email": "Invalid e-mail",
+      "invalid_ip": "Invalid IP address",
+      "invalid_web_password": "Password must be 6..12 chars",
+      "invalid_cloud_password": "Password must be 6..12 chars",
+      "invalid_local_password": "Password must be 6 digits",
+      "wrong_email": "E-mail not registered",
+      "wrong_password": "Incorrect password",
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "no_devices": "No devices found",
+      "unknown": "unknown"
+    },
+    "step": {
+      "user": {
+        "title": "Select SSCPOE autosearch, web or cloud",
+        "data": {
+          "action": "Options:"
         }
+      },
+      "select_if": {
+        "title": "Select network interface and TTL",
+        "data": {
+          "if": "Network interface",
+          "ttl": "Multicast TTL value to override the default"
+        }
+      },
+      "search": {
+        "title": "Select SSCPOE device",
+        "data": {
+          "action": "Options:"
+        }
+      },
+      "local": {
+        "title": "Fill in your SSCPOE local credentials",
+        "data": {
+          "id": "S/N",
+          "password": "Password"
+        }
+      },
+      "web": {
+        "title": "Fill in your SSCPOE WEB credentials",
+        "data": {
+          "ip_address": "IP address",
+          "password": "Password"
+        }
+      },
+      "cloud": {
+        "title": "Fill in your SSCPOE cloud credentials",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate with your SSCPOE credentials",
+        "data": {
+          "id": "S/N",
+          "ip_address": "IP address",
+          "email": "E-mail",
+          "password": "Password"
+        }
+      }
     }
+  }
 }
