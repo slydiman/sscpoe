@@ -1,0 +1,72 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "SSCPOE аккаунт уже сконфигурирован",
+      "reauth_successful": "Успешная повторная авторизация"
+    },
+    "error": {
+      "invalid_email": "Неправильный e-mail",
+      "invalid_ip": "Неправильный IP адрес",
+      "invalid_web_password": "Пароль должен быть 6..12 символов",
+      "invalid_cloud_password": "Пароль должен быть 6..12 символов",
+      "invalid_local_password": "Пароль должен быть 6 цифр",
+      "wrong_email": "E-mail не зарегистрирован",
+      "wrong_password": "Неправильный пароль",
+      "cannot_connect": "Ошибка подключения",
+      "invalid_auth": "Ошибка авторизации",
+      "no_devices": "Устроства не найдены",
+      "unknown": "неизвестно"
+    },
+    "step": {
+      "user": {
+        "title": "Выберите автопоиск, WEB или облако SSCPOE",
+        "data": {
+          "action": "Варианты:"
+        }
+      },
+      "select_if": {
+        "title": "Выберите сетевой интерфейс и TTL",
+        "data": {
+          "if": "Сетевой интерфейс",
+          "ttl": "Значение multicast TTL"
+        }
+      },
+      "search": {
+        "title": "Выберите устройство SSCPOE",
+        "data": {
+          "action": "Варианты:"
+        }
+      },
+      "local": {
+        "title": "Введите пароль для локального доступа SSCPOE",
+        "data": {
+          "id": "S/N",
+          "password": "Пароль"
+        }
+      },
+      "web": {
+        "title": "Введите пароль для WEB доступа SSCPOE",
+        "data": {
+          "ip_address": "IP адрес",
+          "password": "Пароль"
+        }
+      },
+      "cloud": {
+        "title": "Введите e-mail и пароль для облачного доступа SSCPOE",
+        "data": {
+          "email": "E-mail",
+          "password": "Пароль"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Поаторная авторизация SSCPOE",
+        "data": {
+          "id": "S/N",
+          "ip_address": "IP адрес",
+          "email": "E-mail",
+          "password": "Пароль"
+        }
+      }
+    }
+  }
+}
