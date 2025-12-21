@@ -15,6 +15,8 @@ from homeassistant.const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_TOKEN,
+    CONF_IF,
+    CONF_TTL,
 )
 
 import hashlib
@@ -29,6 +31,9 @@ from .protocol import (
     SSCPOE_local_login,
     SSCPOE_web_request,
     SSCPOE_web_login2,
+    SSCPOE_model_from_sn,
+    SSCPOE_LOCAL_DEF_BIND_INTERFACE,
+    SSCPOE_LOCAL_DEF_TTL,
 )
 
 
@@ -48,6 +53,8 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self._key = SSCPOE_CLOUD_KEY
         self._uid = config_entry.data.get(CONF_TOKEN, None)
         self._uid_write = False
+        self._ifname = config_entry.data.get(CONF_IF, SSCPOE_LOCAL_DEF_BIND_INTERFACE)
+        self._ttl = config_entry.data.get(CONF_TTL, SSCPOE_LOCAL_DEF_TTL)
         self.prj = None
         self.devices = None
 
@@ -69,28 +76,6 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             or sn.startswith("GFS2")
             or sn.startswith("GPS4")
         )
-
-    def model_from_sn(sn: str) -> str:
-        # Model may be
-        # AAADDD###: GPS204, GPS208, GPS316, GPS424
-        # AADDDA###: GP208G, PS308G
-        # AADDD###: GS105
-        # and V1 or V3 suffix, like GPS204V3, GP208GV3 or GS105V1.
-        model = sn[0:8]
-        if not (model.endswith("V1") or model.endswith("V3")):
-            model = model[:-1]
-            if not (model.endswith("V1") or model.endswith("V3")):
-                model = model[:-1]
-                if (
-                    model[0].isalpha()
-                    and model[1].isalpha()
-                    and model[2].isdigit()
-                    and model[3].isdigit()
-                    and model[4].isdigit()
-                    and model[5].isdigit()
-                ):
-                    model = model[:-1]
-        return model
 
     def write_token(self) -> None:
         if self._uid_write:
@@ -130,10 +115,14 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             self._update_data_cloud()
 
     def _update_data_local(self) -> None:
-        j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
+        j, err = SSCPOE_local_request(
+            {"callcmd": "detail", "sn": self._sn}, self._ifname, self._ttl
+        )
         if j is None:
             # Second try
-            j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
+            j, err = SSCPOE_local_request(
+                {"callcmd": "detail", "sn": self._sn}, self._ifname, self._ttl
+            )
             if j is None:
                 raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
         if isinstance(j, str):
@@ -141,12 +130,27 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 f"SSCPOE_Coordinator._fetch_data: login/activate with the default passowrd."
             )
             if (
-                SSCPOE_local_login(self._sn, SSCPOE_LOCAL_DEF_PASSWORD) is None
-                or SSCPOE_local_login(self._sn, SSCPOE_LOCAL_DEF_PASSWORD, "activate")
+                SSCPOE_local_login(
+                    self._sn,
+                    SSCPOE_LOCAL_DEF_PASSWORD,
+                    "login",
+                    self._ifname,
+                    self._ttl,
+                )
+                is None
+                or SSCPOE_local_login(
+                    self._sn,
+                    SSCPOE_LOCAL_DEF_PASSWORD,
+                    "activate",
+                    self._ifname,
+                    self._ttl,
+                )
                 is None
             ):
                 # Second try after login/activate.
-                j, err = SSCPOE_local_request({"callcmd": "detail", "sn": self._sn})
+                j, err = SSCPOE_local_request(
+                    {"callcmd": "detail", "sn": self._sn}, self._ifname, self._ttl
+                )
                 if j is None:
                     raise ApiError(f"SSCPOE_local_request(detail, {self._sn}): timeout")
             if isinstance(j, str):
@@ -167,7 +171,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             device["device_info"] = DeviceInfo(
                 identifiers={(DOMAIN, self._sn)},
                 manufacturer="STEAMEMO",
-                model=SSCPOE_Coordinator.model_from_sn(self._sn),
+                model=device.get("model", SSCPOE_model_from_sn(self._sn)),
                 name=detail["name"],
                 sw_version=detail["V"],
                 connections={
@@ -201,7 +205,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             device["device_info"] = DeviceInfo(
                 identifiers={(DOMAIN, _sn)},
                 manufacturer="STEAMEMO",
-                model=SSCPOE_Coordinator.model_from_sn(_sn),
+                model=device.get("model", SSCPOE_model_from_sn(_sn)),
                 name=detail["name"],
                 sw_version=detail["V"],
                 connections={
@@ -261,7 +265,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 device["device_info"] = DeviceInfo(
                     identifiers={(DOMAIN, sn)},
                     manufacturer="STEAMEMO",
-                    model=SSCPOE_Coordinator.model_from_sn(sn),
+                    model=device.get("model", SSCPOE_model_from_sn(sn)),
                     name=detail["name"],
                     sw_version=detail["V"],
                     connections={
@@ -331,7 +335,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 "callcmd": "config",
                 "calldata": {"opcode": opcode},
                 "sn": self._sn,
-            }
+            },
+            self._ifname,
+            self._ttl,
         )
         if j is None:
             raise ApiError("SSCPOE_local_request(config): timeout")

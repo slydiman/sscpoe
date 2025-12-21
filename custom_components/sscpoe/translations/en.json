@@ -17,66 +17,57 @@
       "wrong_password": "Incorrect password",
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
-      "unknown": "unknown",
-      "device_not_found": "Device not found in discovery results",
-      "multicast_discovery_failed": "Multicast discovery failed",
-      "multicast_discovery_timeout": "No devices found (timeout)"
+      "no_devices": "No devices found",
+      "unknown": "unknown"
     },
     "step": {
       "user": {
-        "title": "Select SSCPOE cloud, web or local (old API)",
+        "title": "Select SSCPOE autosearch, web or cloud",
         "data": {
-          "method": "Method"
+          "action": "Options:"
+        }
+      },
+      "select_if": {
+        "title": "Select network interface and TTL",
+        "data": {
+          "if": "Network interface",
+          "ttl": "Multicast TTL value to override the default"
+        }
+      },
+      "search": {
+        "title": "Select SSCPOE device",
+        "data": {
+          "action": "Options:"
         }
       },
       "local": {
-        "title": "Fill in your SSCPOE credentials",
+        "title": "Fill in your SSCPOE local credentials",
         "data": {
           "id": "S/N",
           "password": "Password"
         }
       },
+      "web": {
+        "title": "Fill in your SSCPOE WEB credentials",
+        "data": {
+          "ip_address": "IP address",
+          "password": "Password"
+        }
+      },
       "cloud": {
-        "title": "Fill in your SSCPOE credentials",
+        "title": "Fill in your SSCPOE cloud credentials",
         "data": {
           "email": "E-mail",
           "password": "Password"
-        }
-      },
-      "local_web": {
-        "title": "Local device (WEB)",
-        "data": {
-          "ip_address": "IP address",
-          "password": "Password"
-        }
-      },
-      "web": {
-        "title": "Local device (WEB)",
-        "data": {
-          "ip_address": "IP address",
-          "password": "Password"
-        }
-      },
-      "local_multicast": {
-        "title": "Local discovery (Multicast)",
-        "data": {
-          "bind_interface": "Network interface",
-          "mcast_ttl": "Multicast TTL value to override the default"
-        }
-      },
-      "local_select": {
-        "title": "Select device",
-        "data": {
-          "action": "Device"
         }
       },
       "reauth_confirm": {
         "title": "Reauthenticate with your SSCPOE credentials",
         "data": {
-          "email": "E-mail",
-          "password": "Password",
           "id": "S/N",
-          "ip_address": "IP address"
+          "ip_address": "IP address",
+          "email": "E-mail",
+          "password": "Password"
         }
       }
     }

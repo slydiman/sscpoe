@@ -2,8 +2,11 @@ from __future__ import annotations
 import socket
 from typing import Any, Mapping
 import voluptuous as vol
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers.selector import NumberSelector, NumberSelectorConfig, NumberSelectorMode
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 from homeassistant.config_entries import ConfigFlow, ConfigEntry, CONN_CLASS_CLOUD_POLL
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.const import (
@@ -12,6 +15,8 @@ from homeassistant.const import (
     CONF_EMAIL,
     CONF_PASSWORD,
     CONF_TOKEN,
+    CONF_IF,
+    CONF_TTL,
 )
 from .const import DOMAIN, LOGGER
 from .protocol import (
@@ -21,7 +26,11 @@ from .protocol import (
     SSCPOE_local_login,
     SSCPOE_cloud_login,
     SSCPOE_web_login,
-    SSCPOE_web_request,
+    SSCPOE_web_accessibility,
+    SSCPOE_LOCAL_DEF_PASSWORD,
+    SSCPOE_LOCAL_DEF_BIND_INTERFACE,
+    SSCPOE_LOCAL_DEF_TTL,
+    SSCPOE_get_interfaces,
 )
 
 
@@ -40,67 +49,157 @@ CONF_MCAST_TTL = "mcast_ttl"
 DEFAULT_BIND_INTERFACE = "default"
 
 
+STEP_USER = "user"
+STEP_WEB = "web"
+STEP_CLOUD = "cloud"
+STEP_SEARCH = "search"
+STEP_SELECT_IF = "select_if"
+STEP_REAUTH = "reauth_confirm"
+
+ACTION = "action"
+ACTION_WEB = "web"
+ACTION_CLOUD = "cloud"
+ACTION_SEARCH = "search"
+ACTION_SELECT_IF = "select_if"
+
+
 class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 4
 
     # CONNECTION_CLASS = CONN_CLASS_CLOUD_POLL
 
     local_devices: list[dict] = None
-    entry: ConfigEntry | None = None
-
-    def _extract_model_from_sn(self, sn: str | None) -> str:
-        """Extract model from first 10 chars of SN, strip trailing zeros."""
-        if not sn or len(sn) < 10:
-            return "Unknown"
-        model = sn[:10].rstrip('0')
-        return model if len(model) >= 3 else "Unknown"
-
-    def _normalize_device_data(self, device: dict) -> dict:
-        """Ensure all expected fields are present and consistent across discovery methods."""
-        sn = device.get("sn")
-
-        # Always extract model from SN for consistency, even if 'model' exists
-        device["model"] = self._extract_model_from_sn(sn)
-
-        # Firmware version
-        firmware = device.get("V", "Unknown")
-        if firmware and firmware not in ("Unknown", "0.0.0", "null", ""):
-            device["model"] = f"{device['model']} (FW: {firmware})"
-
-        # Ensure active state
-        if "Active_state" not in device:
-            device["Active_state"] = "active"
-
-        return device
+    interfaces: list[str] = None
+    ifname: str = SSCPOE_LOCAL_DEF_BIND_INTERFACE
+    ttl: int = SSCPOE_LOCAL_DEF_TTL
 
     async def async_step_user(self, user_input: dict[str, str] = None) -> FlowResult:
         """Screen 1: choose connection method."""
         if user_input:
-            method = user_input[CONF_METHOD]
-            if method == METHOD_CLOUD:
+            action = user_input[ACTION]
+            if action == ACTION_SELECT_IF:
+                return await self.async_step_select_if()
+            elif action == ACTION_WEB:
+                return await self.async_step_web()
+            elif action == ACTION_CLOUD:
                 return await self.async_step_cloud()
-            if method == METHOD_LOCAL_WEB:
-                return await self.async_step_local_web()
-            if method == METHOD_LOCAL_MULTICAST:
-                return await self.async_step_local_multicast()
             return self.async_abort(reason="unknown")
 
-        methods = {
-            METHOD_CLOUD: "Cloud",
-            METHOD_LOCAL_WEB: "Local (Web)",
-            METHOD_LOCAL_MULTICAST: "Local (Multicast)",
+        actions = {
+            ACTION_SELECT_IF: "Auto search local SSCPOE devices",
+            ACTION_WEB: "Add SSCPOE WEB device manually",
+            ACTION_CLOUD: "Add SSCPOE cloud account",
         }
         return self.async_show_form(
-            step_id="user",
+            step_id=STEP_USER,
             data_schema=vol.Schema(
-                {vol.Required(CONF_METHOD, default=METHOD_CLOUD): vol.In(methods)}
+                {vol.Required(ACTION, default=ACTION_SELECT_IF): vol.In(actions)}
             ),
+        )
+
+    async def async_step_select_if(
+        self, user_input: dict[str, str] = None
+    ) -> FlowResult:
+        errors: dict[str, str] = {}
+        if self.interfaces is None:
+            self.interfaces = SSCPOE_get_interfaces()
+
+        if user_input:
+            self.ifname = str(user_input[CONF_IF]).split(" (")[
+                0
+            ]  # Extract interface name w/o (IP)
+            self.ttl = int(user_input[CONF_TTL])
+            return await self.async_step_search()
+
+        return self.async_show_form(
+            step_id=STEP_SELECT_IF,
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_IF, default=self.ifname): vol.In(self.interfaces),
+                    vol.Required(CONF_TTL, default=self.ttl): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1,
+                            max=255,
+                            mode=NumberSelectorMode.BOX,  # This ensures display as a text input field
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_search(self, user_input: dict[str, str] = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input:
+            action = user_input[ACTION]
+            if action == ACTION_SELECT_IF:
+                return await self.async_step_select_if()
+            elif action == ACTION_SEARCH:
+                pass
+            elif action.startswith("web_"):
+                ip = action[4:]
+                return self.async_show_form(
+                    step_id=STEP_WEB,
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(CONF_IP_ADDRESS, default=ip): str,
+                            vol.Required(
+                                CONF_PASSWORD, default=SSCPOE_LOCAL_DEF_PASSWORD
+                            ): str,
+                        }
+                    ),
+                )
+            else:
+                sn = action
+                return self.async_show_form(
+                    step_id="local",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(CONF_ID, default=sn): str,
+                            vol.Required(
+                                CONF_PASSWORD, default=SSCPOE_LOCAL_DEF_PASSWORD
+                            ): str,
+                        }
+                    ),
+                )
+
+        self.local_devices = await self.hass.async_add_executor_job(
+            SSCPOE_local_search, self.ifname, self.ttl
+        )
+        actions = {
+            ACTION_SEARCH: "Search again",
+            ACTION_SELECT_IF: "Change interface or TTL",
+        }
+        for device in self.local_devices:
+            sn = device["sn"]
+            ip = device["ip"]
+            # Note SSCPOE_local_search() must normalize the device data, including the model.
+            model = device["model"]
+            fw = device.get("V")
+            if fw:
+                model += f" (FW {fw})"
+            activate = "Not activated! " if device["Active_state"] != "active" else ""
+            is_web = await self.hass.async_add_executor_job(
+                SSCPOE_web_accessibility, ip
+            )
+            if is_web:
+                actions["web_" + ip] = f"Add WEB {activate}{model}, {ip}, S/N: {sn}"
+            actions[sn] = f"Add old API {activate}{model}, {ip}, S/N: {sn}"
+
+        if not self.local_devices:
+            errors["base"] = "no_devices"
+
+        return self.async_show_form(
+            step_id=STEP_SEARCH,
+            data_schema=vol.Schema(
+                {vol.Required(ACTION, default=ACTION_SEARCH): vol.In(actions)}
+            ),
+            errors=errors,
         )
 
     async def async_step_local(self, user_input: dict[str, str] = None) -> FlowResult:
         errors: dict[str, str] = {}
-        sn = None
-        password = "123456"
+        sn = ""
+        password = SSCPOE_LOCAL_DEF_PASSWORD
         if user_input:
             sn = user_input[CONF_ID]
             password = user_input[CONF_PASSWORD]
@@ -109,23 +208,19 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
 
                 def login():
-                    return SSCPOE_local_login(sn, password)
+                    return SSCPOE_local_login(sn, password, "login", self.ifname, self.ttl)
 
                 def activate():
-                    return SSCPOE_local_login(sn, password, "activate")
+                    return SSCPOE_local_login(sn, password, "activate", self.ifname, self.ttl)
 
                 device = next((i for i in (self.local_devices or []) if i.get("sn") == sn), None)
                 if not device:
                     errors["base"] = "device_not_found"
                 else:
-                    if device.get("Active_state") != "active":
-                        err = await self.hass.async_add_executor_job(activate)
-                    else:
-                        err = await self.hass.async_add_executor_job(login)
-                    if err:
-                        errors["base"] = err
-                    else:
-                        return self.async_create_entry(title=sn, data=user_input)
+                    new_data = user_input.copy()
+                    new_data[CONF_IF] = self.ifname
+                    new_data[CONF_TTL] = self.ttl
+                    return self.async_create_entry(title=sn, data=new_data)
 
         return self.async_show_form(
             step_id="local",
@@ -140,8 +235,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_cloud(self, user_input: dict[str, str] = None) -> FlowResult:
         errors: dict[str, str] = {}
-        email = None
-        password = "123456"
+        email = ""
+        password = SSCPOE_LOCAL_DEF_PASSWORD
         if user_input:
             email = user_input[CONF_EMAIL]
             password = user_input[CONF_PASSWORD]
@@ -163,7 +258,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         # If there is no user input or there were errors,
         # show the form again, including any errors that were found with the input.
         return self.async_show_form(
-            step_id="cloud",
+            step_id=STEP_CLOUD,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_EMAIL, default=email): str,
@@ -439,8 +534,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
     
     async def async_step_web(self, user_input: dict[str, str] = None) -> FlowResult:
         errors: dict[str, str] = {}
-        ip = None
-        password = "123456"
+        ip = ""
+        password = SSCPOE_LOCAL_DEF_PASSWORD
         if user_input:
             ip = user_input[CONF_IP_ADDRESS]
             password = user_input[CONF_PASSWORD]
@@ -463,7 +558,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         # If there is no user input or there were errors,
         # show the form again, including any errors that were found with the input.
         return self.async_show_form(
-            step_id="web",
+            step_id=STEP_WEB,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_IP_ADDRESS, default=ip): str,
@@ -490,6 +585,8 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
         email = self.entry.data.get(CONF_EMAIL, None)
         password = self.entry.data.get(CONF_PASSWORD, None)
         token = self.entry.data.get(CONF_TOKEN, None)
+        ifname = self.entry.data.get(CONF_IF, SSCPOE_LOCAL_DEF_BIND_INTERFACE)
+        ttl = self.entry.data.get(CONF_TTL, SSCPOE_LOCAL_DEF_TTL)
         if user_input:
             sn = user_input.get(CONF_ID, sn)
             ip = user_input.get(CONF_IP_ADDRESS, ip)
@@ -501,9 +598,9 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
 
                     def login():
-                        res = SSCPOE_local_login(sn, password, "activate")
+                        res = SSCPOE_local_login(sn, password, "activate", ifname, ttl)
                         if res:
-                            res = SSCPOE_local_login(sn, password)
+                            res = SSCPOE_local_login(sn, password, "login", ifname, ttl)
                         return res
 
                     err = await self.hass.async_add_executor_job(login)
@@ -591,7 +688,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(
-            step_id="reauth_confirm",
+            step_id=STEP_REAUTH,
             data_schema=data_schema,
             errors=errors,
         )
