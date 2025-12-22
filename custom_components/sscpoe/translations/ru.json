@@ -59,7 +59,7 @@
         }
       },
       "reauth_confirm": {
-        "title": "Поаторная авторизация SSCPOE",
+        "title": "Повторная авторизация SSCPOE",
         "data": {
           "id": "S/N",
           "ip_address": "IP адрес",
