@@ -8,11 +8,11 @@
 
 <img align="right" src="https://github.com/slydiman/sscpoe/blob/main/logo.png?raw=true" alt="Logo"/>
 
-Unofficial SSCPOE/STEAMEMO/Amitres IOT integration for Home Assistant to control managed POE switches 4/8/16.
+Unofficial SSCPOE/STEAMEMO/Goalake/Amitres IOT integration for Home Assistant to control managed POE switches 4/8/16.
 
-[Amazon](https://www.amazon.com/stores/STEAMEMO/page/77A8B3BC-CC6D-49F8-B191-49E312082D49)
+[Amazon/STEAMEMO](https://www.amazon.com/stores/STEAMEMO/page/77A8B3BC-CC6D-49F8-B191-49E312082D49)
 
-[AliExpress](https://aliexpress.com/item/32849723315.html)
+[Amazon/Goalake](https://www.amazon.com/stores/Goalake/page/B77F2F8B-5A00-4296-B03C-59A4A496E454)
 
 <img src="https://github.com/slydiman/sscpoe/blob/main/devices.png?raw=true" width="300" alt="Devices"/>
 
