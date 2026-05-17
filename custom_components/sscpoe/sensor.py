@@ -144,15 +144,15 @@ class PortBaseSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
             total = "total_" if self._total else ""
             self._attr_name = f"{prj_name}{Total}{self._desc_name}"
             self._attr_unique_id = f"{cloud}{sn}_{total}{self._id_name}".lower()
-            self.entity_id = f"{DOMAIN}.{cloud}{sn}_{total}{self._id_name}".lower()
+            self.entity_id = f"sensor.{cloud}{sn}_{total}{self._id_name}".lower()
         elif port < 0:
             self._attr_name = f"{prj_name}LAN{-port} {self._desc_name}"
             self._attr_unique_id = f"{cloud}{sn}_lan{-port}_{self._id_name}".lower()
-            self.entity_id = f"{DOMAIN}.{cloud}{sn}_lan{-port}_{self._id_name}".lower()
+            self.entity_id = f"sensor.{cloud}{sn}_lan{-port}_{self._id_name}".lower()
         else:
             self._attr_name = f"{prj_name}Port {port} {self._desc_name}"
             self._attr_unique_id = f"{cloud}{sn}_{port}_{self._id_name}".lower()
-            self.entity_id = f"{DOMAIN}.{cloud}{sn}_{port}_{self._id_name}".lower()
+            self.entity_id = f"sensor.{cloud}{sn}_{port}_{self._id_name}".lower()
         self._attr_device_info = device["device_info"]
 
     @callback

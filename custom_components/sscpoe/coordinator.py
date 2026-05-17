@@ -61,9 +61,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             LOGGER,
-            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
+            config_entry=config_entry,
         )
 
     def reverse_order(sn: str) -> bool:

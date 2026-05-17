@@ -62,8 +62,8 @@ class POEPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         cloud = "cloud_" if SSCPOE_Coordinator.is_cloud(self._pid) else ""
         super().__init__(coordinator, context=(self._pid, sn))
         self._attr_name = f"{prj_name}Port {port} POE"
-        self._attr_unique_id = f"{cloud}{sn}_{port}_switch".lower()
-        self.entity_id = f"{DOMAIN}.{cloud}{sn}_{port}_switch".lower()
+        self._attr_unique_id = f"{cloud}{sn}_{port}_poe".lower()
+        self.entity_id = f"switch.{cloud}{sn}_{port}_poe".lower()
         self._attr_device_info = device["device_info"]
 
     @property
@@ -124,8 +124,8 @@ class ExtendPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         cloud = "cloud_" if SSCPOE_Coordinator.is_cloud(self._pid) else ""
         super().__init__(coordinator, context=(self._pid, sn))
         self._attr_name = f"{prj_name}Port {port} Extend"
-        self._attr_unique_id = f"{cloud}{sn}_{port}_extend_switch".lower()
-        self.entity_id = f"{DOMAIN}.{cloud}{sn}_{port}_extend_switch".lower()
+        self._attr_unique_id = f"{cloud}{sn}_{port}_extend".lower()
+        self.entity_id = f"switch.{cloud}{sn}_{port}_extend".lower()
         self._attr_device_info = device["device_info"]
 
     @property

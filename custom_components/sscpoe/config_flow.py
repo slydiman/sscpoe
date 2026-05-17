@@ -193,10 +193,14 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
 
                 def login():
-                    return SSCPOE_local_login(sn, password, "login", self.ifname, self.ttl)
+                    return SSCPOE_local_login(
+                        sn, password, "login", self.ifname, self.ttl
+                    )
 
                 def activate():
-                    return SSCPOE_local_login(sn, password, "activate", self.ifname, self.ttl)
+                    return SSCPOE_local_login(
+                        sn, password, "activate", self.ifname, self.ttl
+                    )
 
                 device = next(i for i in self.local_devices if i["sn"] == sn)
                 if device["Active_state"] != "active":
