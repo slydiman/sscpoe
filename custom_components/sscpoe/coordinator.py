@@ -96,12 +96,14 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 await self.hass.async_add_executor_job(self._update_data)
         except ApiAuthError as err:
             self._uid = None
+            self._uid_write = True
             self.write_token()
             # Raising ConfigEntryAuthFailed will cancel future updates
             # and start a config flow with SOURCE_REAUTH (async_step_reauth)
             raise ConfigEntryAuthFailed from err
         except ApiError as err:
             self._uid = None
+            self._uid_write = True
             self.write_token()
             raise UpdateFailed(f"Error communicating with API: {err}")
         self.write_token()
@@ -226,6 +228,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 raise ApiAuthError(f'errcode={j["errcode"]}')
             self._uid = j["uid"]
             self._key = j["key"]
+            self._uid_write = True
 
         if self.devices is None:
             if self.prj is None:
@@ -283,6 +286,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 )
         except ApiError as ex:
             self._uid = None
+            self._uid_write = True
             raise UpdateFailed(f"Error communicating with API: {ex}")
 
     async def _async_switch_extend(
@@ -295,6 +299,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 )
         except ApiError as ex:
             self._uid = None
+            self._uid_write = True
             raise UpdateFailed(f"Error communicating with API: {ex}")
 
     def _switch_poe(self, pid: str, sn: str, index: int, poec: bool) -> None:
@@ -302,6 +307,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         err = self._switch(pid, sn, opcode)
         if err != 0:
             self._uid = None
+            self._uid_write = True
             raise UpdateFailed(f"_switch_poe: errcode={err}")
 
     def _switch_extend(self, pid: str, sn: str, index: int, extend: bool) -> None:
@@ -319,6 +325,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
                 opcode = (0x200 if extend else 0x800) | (index << 4)
                 continue
             self._uid = None
+            self._uid_write = True
             raise UpdateFailed(f"_switch_extend: errcode={err}")
 
     def _switch(self, pid: str, sn: str, opcode: int) -> int:
