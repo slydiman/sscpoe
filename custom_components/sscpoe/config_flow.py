@@ -20,9 +20,7 @@ from .const import DOMAIN, LOGGER
 from .protocol import (
     SSCPOE_local_search,
     SSCPOE_local_login,
-    SSCPOE_cloud_login,
-    SSCPOE_web_login,
-    SSCPOE_web_accessibility,
+    SSCPOE_session,
     SSCPOE_LOCAL_DEF_PASSWORD,
     SSCPOE_LOCAL_DEF_BIND_INTERFACE,
     SSCPOE_LOCAL_DEF_TTL,
@@ -163,8 +161,9 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             if fw:
                 model += f" (FW {fw})"
             activate = "Not activated! " if device["Active_state"] != "active" else ""
+            session = SSCPOE_session()
             is_web = await self.hass.async_add_executor_job(
-                SSCPOE_web_accessibility, ip
+                session.web_accessibility, ip
             )
             if is_web:
                 actions["web_" + ip] = f"Add WEB {activate}{model}, {ip}, S/N: {sn}"
@@ -240,7 +239,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
 
                 def login():
-                    return SSCPOE_cloud_login(email, password)
+                    return SSCPOE_session().cloud_login(email, password)
 
                 err = await self.hass.async_add_executor_job(login)
                 if err:
@@ -275,7 +274,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
 
                 def login():
-                    return SSCPOE_web_login(ip, password)
+                    return SSCPOE_session().web_login(ip, password)
 
                 err, token = await self.hass.async_add_executor_job(login)
                 if err:
@@ -352,7 +351,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
 
                     def login():
-                        return SSCPOE_web_login(ip, password, token)
+                        return SSCPOE_session().web_login(ip, password, token)
 
                     err, token = await self.hass.async_add_executor_job(login)
                     if err:
@@ -377,7 +376,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
 
                     def login():
-                        return SSCPOE_cloud_login(email, password)
+                        return SSCPOE_session().cloud_login(email, password)
 
                     err = await self.hass.async_add_executor_job(login)
                     if err:

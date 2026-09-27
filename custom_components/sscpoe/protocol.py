@@ -195,223 +195,34 @@ SSCPOE_LOCAL_KEY = strToUtf8Bytes("EpumTpjli6zIxL1I")
 
 SSCPOE_CLOUD_KEY = "PvuhBnEsLdqhmLlx"
 
-SSCPOE_session = None
-
-
-def SSCPOE_cloud_request(act: str, dt, key: str, uid: str):
-    _key = strToUtf8Bytes(key)
-    _act = None
-    LOGGER.debug(f"SSCPOE_cloud_request: act {act} request: {dt}")
-    _dt = encrypt(strToUtf8Bytes(json_to_str(dt)), _key) if dt else "undefined"
-
-    match act:
-        case "wxl":  # WeChat login
-            _act = "act=wxl&uid=null&dt="
-
-        case "bmb":  # Bind mobile phone
-            _act = "act=bmb&uid=" + uid + "&dt="
-
-        case "prjshrwx":  # WeChat share
-            _act = "act=prjshrwx&uid=" + uid + "&dt="
-
-        case "emreg":  # email registration
-            _act = "act=emreg&uid=null&dt="
-
-        case "eml":  # Email Login
-            _act = "act=eml&uid=null&dt="
-
-        case "prjshrem":  # Email sharing
-            _act = "act=prjshrem&uid=" + uid + "&dt="
-
-        case "logout":  # Account cancellation
-            _act = "act=delaccount&uid=" + uid + "&dt="
-
-        case "alterpd":  # Change user password
-            _act = "act=alterpd&uid=" + uid + "&dt="
-
-        case "resetpd":  # Retrieve user password
-            _act = "act=resetpd&uid=null&dt="
-
-        case "getNicknameAndMobile":  # Get user nickname and mobile phone number
-            _act = "act=userdet&uid=" + uid + "&dt="
-
-        case "getCode":  # Get mobile phone verification code
-            _act = "act=sendcode&uid=null&dt="
-
-        case "altermb":  # Modify mobile phone number
-            _act = "act=altermb&uid=" + uid + "&dt="
-
-        case "mblink":  # Associated mobile phone number
-            _act = "act=mblink&uid=" + uid + "&dt="
-
-        case "prjmng":  # project management
-            _act = "act=prjmng&uid=" + uid + "&dt="
-
-        case "prjadd":  # Add item
-            _act = "act=prjadd&uid=" + uid + "&dt="
-
-        case "prjdel":  # Delete project
-            _act = "act=prjdel&uid=" + uid + "&dt="
-
-        case "prjren":  # Modify project name
-            _act = "act=prjren&uid=" + uid + "&dt="
-
-        case "prjjoin":  # Project participation information
-            _act = "act=prjjoin&uid=" + uid + "&dt="
-
-        case "prjtrf":  # Project handover
-            _act = "act=prjtrf&uid=" + uid + "&dt="
-
-        case "prjrecv":  # Project recycling
-            _act = "act=prjrecv&uid=" + uid + "&dt="
-
-        case "prjjoinren":  # Rename project participants
-            _act = "act=prjjoinren&uid=" + uid + "&dt="
-
-        case "prjstat":  # Project statistics
-            _act = "act=prjstat&uid=" + uid + "&dt="
-
-        case "prjexit":  # Withdraw from participation in the project
-            _act = "act=prjexit&uid=" + uid + "&dt="
-
-        # case 'prjnote': # Project remarks (cancelled)
-        #   act ="act=prjnote&uid=" + uid + "&dt=";
-
-        case "swadd":  # Add switch
-            _act = "act=swadd&uid=" + uid + "&dt="
-
-        case "swmng":  # Switch management
-            _act = "act=swmng&uid=" + uid + "&dt="
-
-        case "swdel":  # Remove switch
-            _act = "act=swdel&uid=" + uid + "&dt="
-
-        case "swnote":  # Switch notes
-            _act = "act=swnote&uid=" + uid + "&dt="
-
-        case "swren":  # Switch rename
-            _act = "act=swren&uid=" + uid + "&dt="
-
-        case "swdel":  # Delete switch
-            _act = "act=swdel&uid=" + uid + "&dt="
-
-        case "swpnote":  # Port remarks
-            _act = "act=swpnote&uid=" + uid + "&dt="
-
-        case "swkey":  # Get device password
-            _act = "act=swkey&uid=" + uid + "&dt="
-
-        case "swfwv":  # Server latest firmware version
-            _act = "act=swfwv&uid=" + uid + "&dt="
-
-        case "swrst":  # switch reset
-            _act = "act=swrst&uid=" + uid + "&dt="
-
-        case "swreb":  # Switch reboot
-            _act = "act=swreb&uid=" + uid + "&dt="
-
-        case "swupd":  # Firmware upgrade
-            _act = "act=swupd&uid=" + uid + "&dt="
-
-        case "swsort":  # Switch sorting
-            _act = "act=swsort&uid=" + uid + "&dt="
-
-        case "swconf":  # Switch configuration
-            _act = "act=swconf&uid=" + uid + "&dt="
-
-        case "swdet":  # Switch details
-            _act = "act=swdet&uid=" + uid + "&dt="
-
-        case "swcall":  # Device callback
-            _act = "act=swcall&uid=" + uid + "&dt="
-
-        case "swtask":  # scheduled tasks
-            _act = "act=swtask&uid=" + uid + "&dt="
-
-    if _act is None:
-        LOGGER.error(f"SSCPOE_cloud_request: Invalid act {act}")
-        return None
-
-    url = _SSCPOE_CLOUD_API_URL + _act + quote(_dt)
-
-    headers = {
-        "user-agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 uni-app Html5Plus/1.0 (Immersed/24.0)",
-        "Connection": "Keep-Alive",
-        "Accept-Encoding": "gzip",
-    }
-
-    global SSCPOE_session
-    try:
-        if SSCPOE_session is None or act == "eml":
-            if SSCPOE_session:
-                SSCPOE_session.close()
-            SSCPOE_session = requests.Session()
-        response = SSCPOE_session.get(url, headers=headers)
-    except Exception as e:
-        LOGGER.exception(f"SSCPOE_cloud_request: act {act}: exception {e}")
-        if act == "eml":
-            return {"errcode": -1}
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None
-
-    if response.status_code != requests.codes.ok:
-        LOGGER.warning(
-            f"SSCPOE_cloud_request: act {act}: response HTTP code: {response.status_code}"
-        )
-        return None
-
-    data = dencrypt(response.text, _key)
-    if data is None:
-        LOGGER.error(
-            f"SSCPOE_cloud_request: act {act}: dencrypt({response.text}) failed"
-        )
-        return None
-
-    j = json.loads(data)
-    if j is None:
-        LOGGER.error(f"SSCPOE_cloud_request: act {act}: Invalid JSON received: {data}")
-        return None
-
-    LOGGER.debug(f"SSCPOE_cloud_request: act {act} response: {j}")
-
-    errcode = j["errcode"]
-    if errcode != 0:
-        LOGGER.error(f"SSCPOE_cloud_request: act {act}: errcode: {errcode}")
-        if act != "eml":
-            return None
-
-    return j
-
-
 SSCPOE_errcode = {
-    0: "OK",
-    10002: "Multiple login",
-    20003: "Invalid email",
-    20004: "Invalid password",
+    -1: "cannot_connect",
+    1001: "invalid_arg",
+    10002: "multiple_login",
+    20003: "wrong_email",
+    20004: "wrong_password",
 }
 
 
-def SSCPOE_cloud_login(email: str, password: str):
-    eml = {
-        "email": email,
-        "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
-    }
-    j = SSCPOE_cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
-    if j is None:
-        return "unknown"
-    errcode = j["errcode"]
-    if errcode == -1:
-        return "cannot_connect"
-    elif errcode == 1001:
-        return "invalid_arg"
-    elif errcode == 20003:
-        return "wrong_email"
-    elif errcode == 20004:
-        return "wrong_password"
-    elif errcode != 0:
-        return f"invalid auth code {errcode}"
-    return None
+class SSCPOE_web_cmd:
+    get_state = 100
+    get_detail = 101
+    set_poe_duplex = 103
+    set_limit = 106
+    storm = 107
+    netcfg = 108
+    vlan = 109
+    mac_table = 114
+    loop_detect = 115
+    link_agg = 116
+    span_tree = 117
+    port_mirror = 118
+    login = 123
+    dhcp_snoop = 124
+    set_auto_extend = 129
+    set_watchdog = 130
+    set_flow = 133
+    get_all = 200
 
 
 def SSCPOE_local_syn():
@@ -656,213 +467,392 @@ def SSCPOE_local_login(
     return None
 
 
-def SSCPOE_web_request(ip: str, uid: str, callcmd: int, calldata=None):
-    headers = {
-        "X-Requested-With": "XMLHttpRequest",
-        "Connection": "keep-alive",
-        "User-Agent": _USER_AGENT,
-        "Content-Type": "application/json; charset=UTF-8",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Encoding": "gzip, deflate",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Host": ip,
-        "Origin": f"http://{ip}",
-        "Referer": f"http://{ip}/",
-    }
+class SSCPOE_session:
 
-    if uid:
-        headers["Cookie"] = f"{uid}="
-    #        cookie = ""
-    #        for i, key in enumerate(uid):
-    #            if cookie:
-    #                cookie += "; "
-    #            cookie += f"{key}="
-    #        headers["Cookie"] = cookie
+    _session = None
 
-    data = {"callcmd": callcmd}
-    if calldata:
-        data["calldata"] = calldata
+    def web_request(self, ip: str, uid: str, callcmd: int, calldata=None):
+        headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            "Connection": "keep-alive",
+            "User-Agent": _USER_AGENT,
+            "Content-Type": "application/json; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Host": ip,
+            "Origin": f"http://{ip}",
+            "Referer": f"http://{ip}/",
+        }
 
-    data = {"data": data}
+        if uid:
+            headers["Cookie"] = f"{uid}="
+        #        cookie = ""
+        #        for i, key in enumerate(uid):
+        #            if cookie:
+        #                cookie += "; "
+        #            cookie += f"{key}="
+        #        headers["Cookie"] = cookie
 
-    url = f"http://{ip}/{callcmd}"
+        data = {"callcmd": callcmd}
+        if calldata:
+            data["calldata"] = calldata
 
-    LOGGER.debug(f"SSCPOE_web_request({ip}, {uid}, {callcmd}, {calldata})...")
+        data = {"data": data}
 
-    global SSCPOE_session
-    try:
-        if SSCPOE_session is None:
-            SSCPOE_session = requests.Session()
-        response = SSCPOE_session.post(
-            url,
-            headers=headers,
-            json=data,
-            verify=False,
-            timeout=(10, 10),
-        )
-    except requests.exceptions.ConnectionError as e:
-        LOGGER.error(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ConnectionError {str(e)}"
-        )
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None, 0
-    except requests.exceptions.ReadTimeout as e:
-        LOGGER.error(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ReadTimeout {str(e)}"
-        )
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None, 0
-    except Exception as e:
-        LOGGER.error(f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): exception {e}")
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None, 0
+        url = f"http://{ip}/{callcmd}"
 
-    if response.status_code != requests.codes.ok:
-        LOGGER.warning(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response HTTP code: {response.status_code}"
-        )
-        return None, 0
+        LOGGER.debug(f"SSCPOE_web_request({ip}, {uid}, {callcmd}, {calldata})...")
 
-    try:
-        j = json.loads(response.text)
-        err = j.get("errcode", 0)
-
-        if callcmd == 123:  # Login
-            cookies = SSCPOE_session.cookies.get_dict()
-            uid = list(cookies.keys())[-1] if cookies else None
-            LOGGER.debug(
-                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, uid: {uid}"
+        try:
+            if self._session is None:
+                self._session = requests.Session()
+            response = self._session.post(
+                url,
+                headers=headers,
+                json=data,
+                verify=False,
+                timeout=(10, 10),
             )
-            return uid, err
+        except requests.exceptions.ConnectionError as e:
+            LOGGER.error(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ConnectionError {str(e)}"
+            )
+            self._session.close()
+            self._session = None
+            return None, 0
+        except requests.exceptions.ReadTimeout as e:
+            LOGGER.error(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ReadTimeout {str(e)}"
+            )
+            self._session.close()
+            self._session = None
+            return None, 0
+        except Exception as e:
+            LOGGER.error(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): exception {e}"
+            )
+            self._session.close()
+            self._session = None
+            return None, 0
 
-        data = j["data"]
-        LOGGER.debug(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, data: {data}"
-        )
-        return data, err
+        if response.status_code != requests.codes.ok:
+            LOGGER.warning(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response HTTP code: {response.status_code}"
+            )
+            return None, 0
 
-    except Exception as e:
-        LOGGER.error(
-            f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}, error: {str(e)}"
-        )
-        return None, 0
+        try:
+            j = json.loads(response.text)
+            err = j.get("errcode", 0)
 
+            if callcmd == SSCPOE_web_cmd.login:
+                cookies = self._session.cookies.get_dict()
+                uid = list(cookies.keys())[-1] if cookies else None
+                LOGGER.debug(
+                    f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, uid: {uid}"
+                )
+                return uid, err
 
-def SSCPOE_web_get(ip: str, path: str, x: bool = False):
-    headers = {
-        "Accept": "text/html, */*; q=0.01",
-        "Accept-Encoding": "gzip, deflate",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive",
-        "User-Agent": _USER_AGENT,
-        "Host": ip,
-        "Origin": f"http://{ip}",
-        "Referer": f"http://{ip}/",
-    }
+            data = j["data"]
+            LOGGER.debug(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, data: {data}"
+            )
+            return data, err
 
-    if ".css" in path:
-        headers["Accept"] = "text/css,*/*;q=0.1"
-    elif "en.js" in path:
-        headers["Accept"] = (
-            "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01"
-        )
-    elif ".js" in path:
-        headers["Accept"] = "*/*"
+        except Exception as e:
+            LOGGER.error(
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}, error: {str(e)}"
+            )
+            return None, 0
 
-    if x:
-        headers["X-Requested-With"] = "XMLHttpRequest"
+    def web_get(self, ip: str, path: str, x: bool = False):
+        headers = {
+            "Accept": "text/html, */*; q=0.01",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+            "User-Agent": _USER_AGENT,
+            "Host": ip,
+            "Origin": f"http://{ip}",
+            "Referer": f"http://{ip}/",
+        }
 
-    url = f"http://{ip}/{path}"
+        if ".css" in path:
+            headers["Accept"] = "text/css,*/*;q=0.1"
+        elif "en.js" in path:
+            headers["Accept"] = (
+                "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01"
+            )
+        elif ".js" in path:
+            headers["Accept"] = "*/*"
 
-    LOGGER.debug(f"SSCPOE_web_get({ip}, {path}) ...")
+        if x:
+            headers["X-Requested-With"] = "XMLHttpRequest"
 
-    global SSCPOE_session
-    try:
-        if SSCPOE_session is None:
-            SSCPOE_session = requests.Session()
-        response = SSCPOE_session.get(
-            url,
-            headers=headers,
-            verify=False,
-            timeout=(10, 10),
-        )
-    except requests.exceptions.ConnectionError as e:
-        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ConnectionError {str(e)}")
-        SSCPOE_session.close()
-        SSCPOE_session = None
+        url = f"http://{ip}/{path}"
+
+        LOGGER.debug(f"SSCPOE_web_get({ip}, {path}) ...")
+
+        try:
+            if self._session is None:
+                self._session = requests.Session()
+            response = self._session.get(
+                url,
+                headers=headers,
+                verify=False,
+                timeout=(10, 10),
+            )
+        except requests.exceptions.ConnectionError as e:
+            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ConnectionError {str(e)}")
+            self._session.close()
+            self._session = None
+            return None
+        except requests.exceptions.ReadTimeout as e:
+            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ReadTimeout {str(e)}")
+            self._session.close()
+            self._session = None
+            return None
+        except Exception as e:
+            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): exception {e}")
+            self._session.close()
+            self._session = None
+            return None
+
+        if response.status_code != requests.codes.ok:
+            LOGGER.warning(
+                f"SSCPOE_web_get({ip}, {path}): response HTTP code: {response.status_code}"
+            )
+            return None
+
+        return response.text
+
+    def web_accessibility(self, ip: str) -> bool:
+        """Check WEB management accessibility."""
+        try:
+            j, err = self.web_request(ip, None, SSCPOE_web_cmd.get_state)
+            if j is not None:
+                return True
+            else:
+                LOGGER.debug(f"SSCPOE WEB access check failed for {ip}: {err}")
+        except Exception as e:
+            LOGGER.debug(f"SSCPOE WEB access check exception for {ip}: {str(e)}")
+        return False
+
+    def web_login2(self, ip: str, password: str, uid: str):
+        return self.web_request(ip, uid, SSCPOE_web_cmd.login, {"password": password})
+
+    def web_login(self, ip: str, password: str, uid: str = None):
+        uid, errcode = self.web_login2(ip, password, uid)
+        if uid and errcode == 0:
+            return None, uid
+
+        if errcode in SSCPOE_errcode:
+            return SSCPOE_errcode[errcode], None
+        if errcode != 0:
+            return f"invalid auth code {errcode}", None
+        return "unknown", None
+
+    def cloud_request(self, act: str, dt, key: str, uid: str):
+        _key = strToUtf8Bytes(key)
+        _act = None
+        LOGGER.debug(f"SSCPOE_cloud_request: act {act} request: {dt}")
+        _dt = encrypt(strToUtf8Bytes(json_to_str(dt)), _key) if dt else "undefined"
+
+        match act:
+            case "wxl":  # WeChat login
+                _act = "act=wxl&uid=null&dt="
+
+            case "bmb":  # Bind mobile phone
+                _act = "act=bmb&uid=" + uid + "&dt="
+
+            case "prjshrwx":  # WeChat share
+                _act = "act=prjshrwx&uid=" + uid + "&dt="
+
+            case "emreg":  # email registration
+                _act = "act=emreg&uid=null&dt="
+
+            case "eml":  # Email Login
+                _act = "act=eml&uid=null&dt="
+
+            case "prjshrem":  # Email sharing
+                _act = "act=prjshrem&uid=" + uid + "&dt="
+
+            case "logout":  # Account cancellation
+                _act = "act=delaccount&uid=" + uid + "&dt="
+
+            case "alterpd":  # Change user password
+                _act = "act=alterpd&uid=" + uid + "&dt="
+
+            case "resetpd":  # Retrieve user password
+                _act = "act=resetpd&uid=null&dt="
+
+            case "getNicknameAndMobile":  # Get user nickname and mobile phone number
+                _act = "act=userdet&uid=" + uid + "&dt="
+
+            case "getCode":  # Get mobile phone verification code
+                _act = "act=sendcode&uid=null&dt="
+
+            case "altermb":  # Modify mobile phone number
+                _act = "act=altermb&uid=" + uid + "&dt="
+
+            case "mblink":  # Associated mobile phone number
+                _act = "act=mblink&uid=" + uid + "&dt="
+
+            case "prjmng":  # project management
+                _act = "act=prjmng&uid=" + uid + "&dt="
+
+            case "prjadd":  # Add item
+                _act = "act=prjadd&uid=" + uid + "&dt="
+
+            case "prjdel":  # Delete project
+                _act = "act=prjdel&uid=" + uid + "&dt="
+
+            case "prjren":  # Modify project name
+                _act = "act=prjren&uid=" + uid + "&dt="
+
+            case "prjjoin":  # Project participation information
+                _act = "act=prjjoin&uid=" + uid + "&dt="
+
+            case "prjtrf":  # Project handover
+                _act = "act=prjtrf&uid=" + uid + "&dt="
+
+            case "prjrecv":  # Project recycling
+                _act = "act=prjrecv&uid=" + uid + "&dt="
+
+            case "prjjoinren":  # Rename project participants
+                _act = "act=prjjoinren&uid=" + uid + "&dt="
+
+            case "prjstat":  # Project statistics
+                _act = "act=prjstat&uid=" + uid + "&dt="
+
+            case "prjexit":  # Withdraw from participation in the project
+                _act = "act=prjexit&uid=" + uid + "&dt="
+
+            # case 'prjnote': # Project remarks (cancelled)
+            #   act ="act=prjnote&uid=" + uid + "&dt=";
+
+            case "swadd":  # Add switch
+                _act = "act=swadd&uid=" + uid + "&dt="
+
+            case "swmng":  # Switch management
+                _act = "act=swmng&uid=" + uid + "&dt="
+
+            case "swdel":  # Remove switch
+                _act = "act=swdel&uid=" + uid + "&dt="
+
+            case "swnote":  # Switch notes
+                _act = "act=swnote&uid=" + uid + "&dt="
+
+            case "swren":  # Switch rename
+                _act = "act=swren&uid=" + uid + "&dt="
+
+            case "swdel":  # Delete switch
+                _act = "act=swdel&uid=" + uid + "&dt="
+
+            case "swpnote":  # Port remarks
+                _act = "act=swpnote&uid=" + uid + "&dt="
+
+            case "swkey":  # Get device password
+                _act = "act=swkey&uid=" + uid + "&dt="
+
+            case "swfwv":  # Server latest firmware version
+                _act = "act=swfwv&uid=" + uid + "&dt="
+
+            case "swrst":  # switch reset
+                _act = "act=swrst&uid=" + uid + "&dt="
+
+            case "swreb":  # Switch reboot
+                _act = "act=swreb&uid=" + uid + "&dt="
+
+            case "swupd":  # Firmware upgrade
+                _act = "act=swupd&uid=" + uid + "&dt="
+
+            case "swsort":  # Switch sorting
+                _act = "act=swsort&uid=" + uid + "&dt="
+
+            case "swconf":  # Switch configuration
+                _act = "act=swconf&uid=" + uid + "&dt="
+
+            case "swdet":  # Switch details
+                _act = "act=swdet&uid=" + uid + "&dt="
+
+            case "swcall":  # Device callback
+                _act = "act=swcall&uid=" + uid + "&dt="
+
+            case "swtask":  # scheduled tasks
+                _act = "act=swtask&uid=" + uid + "&dt="
+
+        if _act is None:
+            LOGGER.error(f"SSCPOE_cloud_request: Invalid act {act}")
+            return None
+
+        url = _SSCPOE_CLOUD_API_URL + _act + quote(_dt)
+
+        headers = {
+            "user-agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 uni-app Html5Plus/1.0 (Immersed/24.0)",
+            "Connection": "Keep-Alive",
+            "Accept-Encoding": "gzip",
+        }
+
+        try:
+            if self._session is None or act == "eml":
+                if self._session:
+                    self._session.close()
+                self._session = requests.Session()
+            response = self._session.get(url, headers=headers)
+        except Exception as e:
+            LOGGER.exception(f"SSCPOE_cloud_request: act {act}: exception {e}")
+            if act == "eml":
+                return {"errcode": -1}
+            self._session.close()
+            self._session = None
+            return None
+
+        if response.status_code != requests.codes.ok:
+            LOGGER.warning(
+                f"SSCPOE_cloud_request: act {act}: response HTTP code: {response.status_code}"
+            )
+            return None
+
+        data = dencrypt(response.text, _key)
+        if data is None:
+            LOGGER.error(
+                f"SSCPOE_cloud_request: act {act}: dencrypt({response.text}) failed"
+            )
+            return None
+
+        j = json.loads(data)
+        if j is None:
+            LOGGER.error(
+                f"SSCPOE_cloud_request: act {act}: Invalid JSON received: {data}"
+            )
+            return None
+
+        LOGGER.debug(f"SSCPOE_cloud_request: act {act} response: {j}")
+
+        errcode = j["errcode"]
+        if errcode != 0:
+            LOGGER.error(f"SSCPOE_cloud_request: act {act}: errcode: {errcode}")
+            if act != "eml":
+                return None
+
+        return j
+
+    def cloud_login2(self, email: str, password: str):
+        eml = {
+            "email": email,
+            "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
+        }
+        return self.cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
+
+    def cloud_login(self, email: str, password: str):
+        j = self.cloud_login2(email, password)
+        if j is None:
+            return "unknown"
+        errcode = j["errcode"]
+        if errcode in SSCPOE_errcode:
+            return SSCPOE_errcode[errcode]
+        if errcode != 0:
+            return f"invalid auth code {errcode}"
         return None
-    except requests.exceptions.ReadTimeout as e:
-        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ReadTimeout {str(e)}")
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None
-    except Exception as e:
-        LOGGER.error(f"SSCPOE_web_get({ip}, {path}): exception {e}")
-        SSCPOE_session.close()
-        SSCPOE_session = None
-        return None
-
-    if response.status_code != requests.codes.ok:
-        LOGGER.warning(
-            f"SSCPOE_web_get({ip}, {path}): response HTTP code: {response.status_code}"
-        )
-        return None
-
-    return response.text
-
-
-def SSCPOE_web_accessibility(ip: str) -> bool:
-    """Check WEB management accessibility."""
-    try:
-        j, err = SSCPOE_web_request(ip, None, 100)
-        if j is not None:
-            return True
-        else:
-            LOGGER.debug(f"SSCPOE WEB access check failed for {ip}: {err}")
-    except Exception as e:
-        LOGGER.debug(f"SSCPOE WEB access check exception for {ip}: {str(e)}")
-    return False
-
-
-def SSCPOE_web_login2(ip: str, password: str, uid: str):
-    #    LOGGER.debug(f"SSCPOE_web_login2({ip})...")
-    #    if SSCPOE_web_get(ip, "", uid) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (1) failed")
-    #        return None
-    #    if SSCPOE_web_get(ip, "css/style.css", uid) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (2) failed")
-    #        return None
-    #    if SSCPOE_web_get(ip, "js/jquery_3.6.0.min.js", uid) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (3) failed")
-    #        return None
-    #    if SSCPOE_web_get(ip, "js/utils.js", uid) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (4) failed")
-    #        return None
-    #    if SSCPOE_web_get(ip, f"langs/en.js?_={int(time.time()*1000)}", uid, True) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (5) failed")
-    #        return None
-    #    if SSCPOE_web_get(ip, "login.html", uid, True) is None:
-    #        LOGGER.warning(f"SSCPOE_web_login({ip}): get (6) failed")
-    #        return None
-    return SSCPOE_web_request(ip, uid, 123, {"password": password})
-
-
-def SSCPOE_web_login(ip: str, password: str, uid: str = None):
-    uid, errcode = SSCPOE_web_login2(ip, password, uid)
-    if uid and errcode == 0:
-        return None, uid
-
-    if errcode == -1:
-        return "cannot_connect", None
-    elif errcode == 1001:
-        return "invalid_arg", None
-    elif errcode == 20003:
-        return "wrong_email", None
-    elif errcode == 20004:
-        return "wrong_password", None
-    elif errcode != 0:
-        return f"invalid auth code {errcode}", None
-    return "unknown", None

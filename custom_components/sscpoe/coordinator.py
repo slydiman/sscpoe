@@ -19,21 +19,19 @@ from homeassistant.const import (
     CONF_TTL,
 )
 
-import hashlib
 import asyncio
 from datetime import timedelta
 from .const import DOMAIN, LOGGER
 from .protocol import (
     SSCPOE_CLOUD_KEY,
     SSCPOE_LOCAL_DEF_PASSWORD,
-    SSCPOE_cloud_request,
-    SSCPOE_local_request,
-    SSCPOE_local_login,
-    SSCPOE_web_request,
-    SSCPOE_web_login2,
-    SSCPOE_model_from_sn,
     SSCPOE_LOCAL_DEF_BIND_INTERFACE,
     SSCPOE_LOCAL_DEF_TTL,
+    SSCPOE_local_request,
+    SSCPOE_local_login,
+    SSCPOE_web_cmd,
+    SSCPOE_session,
+    SSCPOE_model_from_sn,
 )
 
 
@@ -46,6 +44,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         return pid != SSCPOE_Coordinator.LOCAL_PID and pid != SSCPOE_Coordinator.WEB_PID
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+        self._session = SSCPOE_session()
         self._sn = config_entry.data.get(CONF_ID, None)
         self._ip = config_entry.data.get(CONF_IP_ADDRESS, None)
         self._email = config_entry.data.get(CONF_EMAIL, None)
@@ -183,15 +182,21 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     def _update_data_web(self) -> None:
         if self._uid is None:
-            self._uid, err = SSCPOE_web_login2(self._ip, self._password, self._uid)
+            self._uid, err = self._session.web_login2(
+                self._ip, self._password, self._uid
+            )
             if self._uid is None or err != 0:
                 raise ApiAuthError(f"ip={self._ip}, errcode={err}")
             self._uid_write = True
-        j, err = SSCPOE_web_request(self._ip, self._uid, 101)
+        j, err = self._session.web_request(
+            self._ip, self._uid, SSCPOE_web_cmd.get_detail
+        )
         if j is None or err != 0:
             self._uid = None
             self._uid_write = True
-            raise ApiError(f"SSCPOE_web_request({self._ip}, 101) errcode={err}")
+            raise ApiError(
+                f"SSCPOE_web_request({self._ip}, {SSCPOE_web_cmd.get_detail}) errcode={err}"
+            )
         detail = j["calldata"]
         _sn = detail["sn"]
         if self.prj is None:
@@ -217,11 +222,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     def _update_data_cloud(self) -> None:
         if self._uid is None:
-            eml = {
-                "email": self._email,
-                "pd": hashlib.md5(self._password.encode("utf-8")).hexdigest(),
-            }
-            j = SSCPOE_cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
+            j = self._session.cloud_login2(self._email, self._password)
             if j is None:
                 raise ApiError("SSCPOE_cloud_request(eml): unknown")
             if j["errcode"] != 0:
@@ -232,14 +233,14 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
         if self.devices is None:
             if self.prj is None:
-                j = SSCPOE_cloud_request("prjmng", None, self._key, self._uid)
+                j = self._session.cloud_request("prjmng", None, self._key, self._uid)
                 if j is None:
                     raise ApiError("SSCPOE_cloud_request(prjmng): unknown")
                 self.prj = {}
                 for p in j["admin"] + j["join"]:
                     pid = p["pid"]
                     self.prj[pid] = p
-                    j = SSCPOE_cloud_request(
+                    j = self._session.cloud_request(
                         "swmng", {"pid": pid}, self._key, self._uid
                     )
                     if j is None:
@@ -254,7 +255,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
         for i, sn in enumerate(self.devices):
             device = self.devices[sn]
-            j = SSCPOE_cloud_request(
+            j = self._session.cloud_request(
                 "swdet",
                 {"pid": device["pid"], "sn": sn, "isJoin": "1"},
                 self._key,
@@ -353,10 +354,12 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
     def _switch_web(self, opcode: int) -> int:
         if self._uid is None:
             return 10001
-        j, err = SSCPOE_web_request(self._ip, self._uid, 103, {"opcode": opcode})
+        j, err = self._session.web_request(
+            self._ip, self._uid, SSCPOE_web_cmd.set_poe_duplex, {"opcode": opcode}
+        )
         if j is None or err != 0:
             raise ApiError(
-                f"SSCPOE_web_request({self._ip}, 103, opcode: {opcode}) errcode={err}"
+                f"SSCPOE_web_request({self._ip}, {SSCPOE_web_cmd.set_poe_duplex}, opcode: {opcode}) errcode={err}"
             )
         return err
 
@@ -368,7 +371,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
             "sn": sn,
             "opcode": opcode,
         }
-        j = SSCPOE_cloud_request("swconf", swconf, self._key, self._uid)
+        j = self._session.cloud_request("swconf", swconf, self._key, self._uid)
         if j is None:
             raise ApiError("SSCPOE_cloud_request(swconf): unknown")
         err = int(j["data"]["errcode"])
