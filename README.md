@@ -3,7 +3,6 @@
 <p align="center">
   <a href="https://github.com/slydiman/sscpoe/releases"><img src="https://img.shields.io/github/v/release/slydiman/sscpoe?display_name=tag&include_prereleases&sort=semver" alt="Current version" /></a>
   <img alt="GitHub" src="https://img.shields.io/github/license/slydiman/sscpoe" />
-  <img alt="GitHub manifest.json dynamic (path)" src="https://img.shields.io/github/manifest-json/requirements/slydiman/sscpoe%2Fmain%2Fcustom_components%2Fsscpoe?label=requirements" />
 </p>
 
 <img align="right" src="https://github.com/slydiman/sscpoe/blob/main/logo.png?raw=true" alt="Logo"/>
