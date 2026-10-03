@@ -19,29 +19,51 @@ async def async_setup_entry(
 
     if coordinator.devices:
         for d, sn in enumerate(coordinator.devices):
-            device = coordinator.devices[sn]
-            if "poec" in device["detail"]:
-                ports = len(device["detail"]["poec"])
-                reverse = SSCPOE_Coordinator.reverse_order(sn)
-                for i in range(ports):
-                    new_devices.append(
-                        POEPortSwitch(
+            detail = coordinator.devices[sn]["detail"]
+
+            lans = 0
+            if "link" in detail:
+                lans = len(detail["link"])
+            elif "phyc" in detail:
+                lans = len(detail["phyc"])
+            elif "rx" in detail:
+                lans = len(detail["rx"])
+            elif "tx" in detail:
+                lans = len(detail["tx"])
+
+            ports = 0
+            if "pw" in detail:
+                ports = len(detail["pw"])
+            elif "poec" in detail:
+                ports = len(detail["poec"])
+
+            reverse = SSCPOE_Coordinator.reverse_order(sn)
+            for i in range(ports):
+                new_devices.append(
+                    POEPortSwitch(
+                        coordinator,
+                        sn,
+                        i + 1,
+                        (ports - 1 - i) if reverse else i,
+                    )
+                )
+            for i in range(lans):
+                new_devices.append(
+                    ExtendPortSwitch(
+                        coordinator, sn, -1 - i, (lans - 1 - i) if reverse else i
+                    )
+                    if ports == 0
+                    else (
+                        ExtendPortSwitch(
                             coordinator,
                             sn,
                             i + 1,
                             (ports - 1 - i) if reverse else i,
                         )
+                        if i < ports
+                        else ExtendPortSwitch(coordinator, sn, ports - i - 1, i)
                     )
-                if "phyc" in device["detail"]:
-                    for i in range(ports):
-                        new_devices.append(
-                            ExtendPortSwitch(
-                                coordinator,
-                                sn,
-                                i + 1,
-                                (ports - 1 - i) if reverse else i,
-                            )
-                        )
+                )
 
     if new_devices:
         async_add_entities(new_devices)
@@ -65,6 +87,13 @@ class POEPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         self._attr_unique_id = f"{cloud}{sn}_{port}_poe".lower()
         self.entity_id = f"switch.{cloud}{sn}_{port}_poe".lower()
         self._attr_device_info = device["device_info"]
+
+    @property
+    def available(self) -> bool:
+        """Return system availability."""
+        return (
+            super().available and self.coordinator.devices[self._sn]["detail"]["online"]
+        )
 
     @property
     def icon(self):
@@ -123,10 +152,22 @@ class ExtendPortSwitch(CoordinatorEntity[SSCPOE_Coordinator], SwitchEntity):
         )
         cloud = "cloud_" if SSCPOE_Coordinator.is_cloud(self._pid) else ""
         super().__init__(coordinator, context=(self._pid, sn))
-        self._attr_name = f"{prj_name}Port {port} Extend"
-        self._attr_unique_id = f"{cloud}{sn}_{port}_extend".lower()
-        self.entity_id = f"switch.{cloud}{sn}_{port}_extend".lower()
+        if port < 0:
+            self._attr_name = f"{prj_name}LAN{-port} Extend"
+            self._attr_unique_id = f"{cloud}{sn}_lan{-port}_extend".lower()
+            self.entity_id = f"switch.{cloud}{sn}_lan{-port}_extend".lower()
+        else:
+            self._attr_name = f"{prj_name}Port {port} Extend"
+            self._attr_unique_id = f"{cloud}{sn}_{port}_extend".lower()
+            self.entity_id = f"switch.{cloud}{sn}_{port}_extend".lower()
         self._attr_device_info = device["device_info"]
+
+    @property
+    def available(self) -> bool:
+        """Return system availability."""
+        return (
+            super().available and self.coordinator.devices[self._sn]["detail"]["online"]
+        )
 
     @property
     def icon(self):

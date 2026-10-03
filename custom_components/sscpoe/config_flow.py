@@ -241,7 +241,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 def login():
                     return SSCPOE_session().cloud_login(email, password)
 
-                err = await self.hass.async_add_executor_job(login)
+                _, err = await self.hass.async_add_executor_job(login)
                 if err:
                     errors["base"] = err
                 else:
@@ -276,7 +276,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                 def login():
                     return SSCPOE_session().web_login(ip, password)
 
-                err, token = await self.hass.async_add_executor_job(login)
+                token, err = await self.hass.async_add_executor_job(login)
                 if err:
                     errors["base"] = err
                 else:
@@ -353,7 +353,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     def login():
                         return SSCPOE_session().web_login(ip, password, token)
 
-                    err, token = await self.hass.async_add_executor_job(login)
+                    token, err = await self.hass.async_add_executor_job(login)
                     if err:
                         errors["base"] = err
                     else:
@@ -378,7 +378,7 @@ class SSCPOE_ConfigFlow(ConfigFlow, domain=DOMAIN):
                     def login():
                         return SSCPOE_session().cloud_login(email, password)
 
-                    err = await self.hass.async_add_executor_job(login)
+                    _, err = await self.hass.async_add_executor_job(login)
                     if err:
                         errors["base"] = err
                     else:

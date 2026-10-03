@@ -155,6 +155,13 @@ class PortBaseSensor(CoordinatorEntity[SSCPOE_Coordinator], SensorEntity):
             self.entity_id = f"sensor.{cloud}{sn}_{port}_{self._id_name}".lower()
         self._attr_device_info = device["device_info"]
 
+    @property
+    def available(self) -> bool:
+        """Return system availability."""
+        return (
+            super().available and self.coordinator.devices[self._sn]["detail"]["online"]
+        )
+
     @callback
     def _handle_coordinator_update(self) -> None:
         try:

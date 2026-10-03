@@ -175,11 +175,11 @@ def dencrypt(s: str, key: bytes) -> str:
     for i in range(align, _len):
         out[i] = dencryptByte(bs[i], keys, i)
 
-    # print(f'DEBUG: {out}')
+    #    print(f'DEBUG: {out}')
     try:
         return str(out, encoding="utf-8")
     except:
-        LOGGER.error(f"dencrypt({s}) -> invalid string {out}")
+        #        LOGGER.error(f"dencrypt({s}, {key}) failed")
         return None
 
 
@@ -196,9 +196,11 @@ SSCPOE_LOCAL_KEY = strToUtf8Bytes("EpumTpjli6zIxL1I")
 SSCPOE_CLOUD_KEY = "PvuhBnEsLdqhmLlx"
 
 SSCPOE_errcode = {
-    -1: "cannot_connect",
+    0: None,
     1001: "invalid_arg",
-    10002: "multiple_login",
+    1009: "wrong_password",
+    1015: "timeout",  # cloud: device response timeout
+    #   10002: "ioterr", # use errmsg instead
     20003: "wrong_email",
     20004: "wrong_password",
 }
@@ -371,18 +373,28 @@ def SSCPOE_local_recv(sock, syn):
             raise ValueError(f"Invalid EOF: '{s}'")
         j = json.loads(dencrypt(s[:-2], SSCPOE_LOCAL_KEY))
         LOGGER.debug(f"SSCPOE_local_recv: {j}")
-        if j["ack"] != "calludp":
+        if j.get("ack") != "calludp":
             raise ValueError(f"Invalid ack: {j}")
-        if j["syn"] != syn:
+        if j.get("syn") != syn:
             raise ValueError(f"Invalid syn: {j}")
-        err = j.get("errcode", 0)
-        return j["data"], err
+        errcode = j.get("errcode", 0)
+        err = SSCPOE_errcode.get(errcode, f"errcode {errcode}")
+        data = j.get("data")
+        if isinstance(data, str):
+            err = f"auth {err} {data}" if err else f"auth {data}"
+            return None, err
+        if err or data is None:
+            err = err or "unknown"
+            LOGGER.error(f"SSCPOE_local_recv: {err}, data: {data}")
+            return None, err
+        LOGGER.debug(f"SSCPOE_local_recv: {data}")
+        return data, err
     except TimeoutError:
-        LOGGER.debug(f"SSCPOE_local_recv: Timeout")
-        return None, 0
+        LOGGER.debug(f"SSCPOE_local_recv: timeout")
+        return None, "timeout"
     except Exception as e:
         LOGGER.exception(f"SSCPOE_local_recv: {e}")
-        return None, 0
+        return None, str(e)
 
 
 def SSCPOE_model_from_sn(sn: str) -> str:
@@ -520,112 +532,127 @@ class SSCPOE_session:
             )
             self._session.close()
             self._session = None
-            return None, 0
+            return None, str(e)
         except requests.exceptions.ReadTimeout as e:
             LOGGER.error(
                 f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): ReadTimeout {str(e)}"
             )
             self._session.close()
             self._session = None
-            return None, 0
+            return None, str(e)
         except Exception as e:
             LOGGER.error(
                 f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): exception {e}"
             )
             self._session.close()
             self._session = None
-            return None, 0
+            return None, str(e)
 
         if response.status_code != requests.codes.ok:
             LOGGER.warning(
                 f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response HTTP code: {response.status_code}"
             )
-            return None, 0
+            return (
+                None,
+                requests.status_codes._codes.get(
+                    response.status_code, (f"HTTP {response.status_code}",)
+                )[0],
+            )
 
         try:
             j = json.loads(response.text)
-            err = j.get("errcode", 0)
-
+            errcode = j.get("errcode", 0)
+            err = SSCPOE_errcode.get(errcode, j.get("errmsg", f"errcode {errcode}"))
             if callcmd == SSCPOE_web_cmd.login:
                 cookies = self._session.cookies.get_dict()
                 uid = list(cookies.keys())[-1] if cookies else None
                 LOGGER.debug(
-                    f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, uid: {uid}"
+                    f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): {j}, uid: {uid}, err: {err}"
                 )
+                if err == "invalid_arg":
+                    err = "wrong_password"
+                if uid is None:
+                    return None, err or "unknown"
                 return uid, err
 
-            data = j["data"]
+            data = j.get("data")
+            if err or data is None:
+                err = err or "unknown"
+                LOGGER.error(
+                    f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): data: {data}, err: {err}"
+                )
+                return None, err
             LOGGER.debug(
-                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): err: {err}, data: {data}"
+                f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): data: {data}, err: {err}"
             )
-            return data, err
+            return data, None
 
         except Exception as e:
             LOGGER.error(
                 f"SSCPOE_web_request({ip}, {callcmd}, {calldata}): response: {response.text}, error: {str(e)}"
             )
-            return None, 0
+            return None, str(e)
 
-    def web_get(self, ip: str, path: str, x: bool = False):
-        headers = {
-            "Accept": "text/html, */*; q=0.01",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive",
-            "User-Agent": _USER_AGENT,
-            "Host": ip,
-            "Origin": f"http://{ip}",
-            "Referer": f"http://{ip}/",
-        }
-
-        if ".css" in path:
-            headers["Accept"] = "text/css,*/*;q=0.1"
-        elif "en.js" in path:
-            headers["Accept"] = (
-                "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01"
-            )
-        elif ".js" in path:
-            headers["Accept"] = "*/*"
-
-        if x:
-            headers["X-Requested-With"] = "XMLHttpRequest"
-
-        url = f"http://{ip}/{path}"
-
-        LOGGER.debug(f"SSCPOE_web_get({ip}, {path}) ...")
-
-        try:
-            if self._session is None:
-                self._session = requests.Session()
-            response = self._session.get(
-                url,
-                headers=headers,
-                verify=False,
-                timeout=(10, 10),
-            )
-        except requests.exceptions.ConnectionError as e:
-            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ConnectionError {str(e)}")
-            self._session.close()
-            self._session = None
-            return None
-        except requests.exceptions.ReadTimeout as e:
-            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ReadTimeout {str(e)}")
-            self._session.close()
-            self._session = None
-            return None
-        except Exception as e:
-            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): exception {e}")
-            self._session.close()
-            self._session = None
-            return None
-
-        if response.status_code != requests.codes.ok:
-            LOGGER.warning(
-                f"SSCPOE_web_get({ip}, {path}): response HTTP code: {response.status_code}"
-            )
-            return None
-
-        return response.text
+    #    def web_get(self, ip: str, path: str, x: bool = False):
+    #        headers = {
+    #            "Accept": "text/html, */*; q=0.01",
+    #            "Accept-Encoding": "gzip, deflate",
+    #            "Accept-Language": "en-US,en;q=0.9",
+    #            "Connection": "keep-alive",
+    #            "User-Agent": _USER_AGENT,
+    #            "Host": ip,
+    #            "Origin": f"http://{ip}",
+    #            "Referer": f"http://{ip}/",
+    #        }
+    #
+    #        if ".css" in path:
+    #            headers["Accept"] = "text/css,*/*;q=0.1"
+    #        elif "en.js" in path:
+    #            headers["Accept"] = (
+    #                "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01"
+    #            )
+    #        elif ".js" in path:
+    #            headers["Accept"] = "*/*"
+    #
+    #        if x:
+    #            headers["X-Requested-With"] = "XMLHttpRequest"
+    #
+    #        url = f"http://{ip}/{path}"
+    #
+    #        LOGGER.debug(f"SSCPOE_web_get({ip}, {path}) ...")
+    #
+    #        try:
+    #            if self._session is None:
+    #                self._session = requests.Session()
+    #            response = self._session.get(
+    #                url,
+    #                headers=headers,
+    #                verify=False,
+    #                timeout=(10, 10),
+    #            )
+    #        except requests.exceptions.ConnectionError as e:
+    #            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ConnectionError {str(e)}")
+    #            self._session.close()
+    #            self._session = None
+    #            return None
+    #        except requests.exceptions.ReadTimeout as e:
+    #            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): ReadTimeout {str(e)}")
+    #            self._session.close()
+    #            self._session = None
+    #            return None
+    #        except Exception as e:
+    #            LOGGER.error(f"SSCPOE_web_get({ip}, {path}): exception {e}")
+    #            self._session.close()
+    #            self._session = None
+    #            return None
+    #
+    #        if response.status_code != requests.codes.ok:
+    #            LOGGER.warning(
+    #                f"SSCPOE_web_get({ip}, {path}): response HTTP code: {response.status_code}"
+    #            )
+    #            return None
+    #
+    #        return response.text
 
     def web_accessibility(self, ip: str) -> bool:
         """Check WEB management accessibility."""
@@ -639,19 +666,8 @@ class SSCPOE_session:
             LOGGER.debug(f"SSCPOE WEB access check exception for {ip}: {str(e)}")
         return False
 
-    def web_login2(self, ip: str, password: str, uid: str):
-        return self.web_request(ip, uid, SSCPOE_web_cmd.login, {"password": password})
-
     def web_login(self, ip: str, password: str, uid: str = None):
-        uid, errcode = self.web_login2(ip, password, uid)
-        if uid and errcode == 0:
-            return None, uid
-
-        if errcode in SSCPOE_errcode:
-            return SSCPOE_errcode[errcode], None
-        if errcode != 0:
-            return f"invalid auth code {errcode}", None
-        return "unknown", None
+        return self.web_request(ip, uid, SSCPOE_web_cmd.login, {"password": password})
 
     def cloud_request(self, act: str, dt, key: str, uid: str):
         _key = strToUtf8Bytes(key)
@@ -785,7 +801,7 @@ class SSCPOE_session:
 
         if _act is None:
             LOGGER.error(f"SSCPOE_cloud_request: Invalid act {act}")
-            return None
+            return None, f"invalid act {act}"
 
         url = _SSCPOE_CLOUD_API_URL + _act + quote(_dt)
 
@@ -803,56 +819,48 @@ class SSCPOE_session:
             response = self._session.get(url, headers=headers)
         except Exception as e:
             LOGGER.exception(f"SSCPOE_cloud_request: act {act}: exception {e}")
-            if act == "eml":
-                return {"errcode": -1}
             self._session.close()
             self._session = None
-            return None
+            return None, str(e)
 
         if response.status_code != requests.codes.ok:
             LOGGER.warning(
                 f"SSCPOE_cloud_request: act {act}: response HTTP code: {response.status_code}"
             )
-            return None
+            return (
+                None,
+                requests.status_codes._codes.get(
+                    response.status_code, (f"HTTP {response.status_code}",)
+                )[0],
+            )
 
         data = dencrypt(response.text, _key)
         if data is None:
             LOGGER.error(
-                f"SSCPOE_cloud_request: act {act}: dencrypt({response.text}) failed"
+                f"SSCPOE_cloud_request: act {act}: dencrypt({response.text}, {_key}) failed"
             )
-            return None
+            return None, "dencrypt failed"
 
         j = json.loads(data)
         if j is None:
             LOGGER.error(
                 f"SSCPOE_cloud_request: act {act}: Invalid JSON received: {data}"
             )
-            return None
+            return None, "bad json"
 
         LOGGER.debug(f"SSCPOE_cloud_request: act {act} response: {j}")
 
-        errcode = j["errcode"]
-        if errcode != 0:
-            LOGGER.error(f"SSCPOE_cloud_request: act {act}: errcode: {errcode}")
-            if act != "eml":
-                return None
+        errcode = j.get("errcode", 0)
+        err = SSCPOE_errcode.get(errcode, j.get("errmsg", f"errcode {errcode}"))
+        if err:
+            LOGGER.error(f"SSCPOE_cloud_request: act {act}: err: {err}")
+            return None, err
 
-        return j
+        return j, None
 
-    def cloud_login2(self, email: str, password: str):
+    def cloud_login(self, email: str, password: str):
         eml = {
             "email": email,
             "pd": hashlib.md5(password.encode("utf-8")).hexdigest(),
         }
         return self.cloud_request("eml", eml, SSCPOE_CLOUD_KEY, None)
-
-    def cloud_login(self, email: str, password: str):
-        j = self.cloud_login2(email, password)
-        if j is None:
-            return "unknown"
-        errcode = j["errcode"]
-        if errcode in SSCPOE_errcode:
-            return SSCPOE_errcode[errcode]
-        if errcode != 0:
-            return f"invalid auth code {errcode}"
-        return None
