@@ -44,6 +44,7 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         return pid != SSCPOE_Coordinator.LOCAL_PID and pid != SSCPOE_Coordinator.WEB_PID
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+        self._lock = asyncio.Lock()
         self._session = SSCPOE_session()
         self._sn = config_entry.data.get(CONF_ID, None)
         self._ip = config_entry.data.get(CONF_IP_ADDRESS, None)
@@ -91,8 +92,9 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> None:
         try:
-            async with asyncio.timeout(10):
-                await self.hass.async_add_executor_job(self._update_data)
+            async with self._lock:
+                async with asyncio.timeout(10):
+                    await self.hass.async_add_executor_job(self._update_data)
         except Exception as ex:
             if isinstance(ex, ApiAuthError):
                 self._uid = None
@@ -300,10 +302,12 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self, pid: str, sn: str, index: int, poec: bool
     ) -> None:
         try:
-            async with asyncio.timeout(10 if SSCPOE_Coordinator.is_cloud(pid) else 2):
-                return await self.hass.async_add_executor_job(
-                    self._switch_poe, pid, sn, index, poec
-                )
+            timeout = 10 if SSCPOE_Coordinator.is_cloud(pid) else 2
+            async with self._lock:
+                async with asyncio.timeout(timeout):
+                    return await self.hass.async_add_executor_job(
+                        self._switch_poe, pid, sn, index, poec
+                    )
         except Exception as ex:  # ApiError or TimeoutError
             if not self._email:  # Don't relogin the cloud account
                 self._uid = None
@@ -314,10 +318,12 @@ class SSCPOE_Coordinator(DataUpdateCoordinator):
         self, pid: str, sn: str, index: int, extend: bool
     ) -> None:
         try:
-            async with asyncio.timeout(10 if SSCPOE_Coordinator.is_cloud(pid) else 2):
-                return await self.hass.async_add_executor_job(
-                    self._switch_extend, pid, sn, index, extend
-                )
+            timeout = 10 if SSCPOE_Coordinator.is_cloud(pid) else 2
+            async with self._lock:
+                async with asyncio.timeout(timeout):
+                    return await self.hass.async_add_executor_job(
+                        self._switch_extend, pid, sn, index, extend
+                    )
         except Exception as ex:  # ApiError or TimeoutError
             if not self._email:  # Don't relogin the cloud account
                 self._uid = None
